@@ -138,14 +138,14 @@ def _crawl_29cm_requests(url: str) -> dict:
     result = {
         'success': False, 'name':'', 'price':0, 'image_url':'', 'brand':'',
         'fabric':{'material':'','composition':'','weight':'','origin':''},
-        'season':'', 'error':''
+        'season':'', 'mfg_date':'', 'error':''
     }
     sess = make_session()
     try:
         # 메인 방문으로 쿠키 획득
         try: sess.get('https://www.29cm.co.kr/', timeout=8)
         except: pass
-        human_delay(0.6, 1.5)
+        human_delay(0.5, 1.2)
         sess.headers.update({'Referer': 'https://www.29cm.co.kr/', 'User-Agent': _ua()})
 
         resp = sess.get(url, timeout=15)
@@ -154,139 +154,93 @@ def _crawl_29cm_requests(url: str) -> dict:
             return result
 
         soup = BeautifulSoup(resp.text, 'html.parser')
-        page_text = soup.get_text(' ', strip=True)
         raw_text = resp.text
 
-        # ── 0순위: __next_f 청크 파싱 (Next.js App Router 방식) ──
-        # 29cm은 __NEXT_DATA__ 대신 self.__next_f.push 방식으로 데이터 전달
-        try:
-            chunks = re.findall(r'self\.__next_f\.push\(\[1,"(.+?)"\]\)', raw_text, re.DOTALL)
-            full_nf = ''
-            for chunk in chunks:
-                try:
-                    full_nf += json.loads(f'"{chunk}"')
-                except:
-                    full_nf += chunk
+        # ── 1순위: JSON-LD (schema.org) - 브랜드·가격·이름·이미지 ──
+        # 29cm은 <script type="application/ld+json">에 정확한 데이터를 담음
+        for ld_script in soup.find_all('script', type='application/ld+json'):
+            try:
+                ld = json.loads(ld_script.string or '{}')
+                if ld.get('@type') == 'Product':
+                    # 상품명
+                    if not result['name']:
+                        result['name'] = ld.get('name', '')
+                    # 브랜드
+                    brand_obj = ld.get('brand', {})
+                    if not result['brand'] and isinstance(brand_obj, dict):
+                        result['brand'] = brand_obj.get('name', '')
+                    # 가격
+                    offers = ld.get('offers', {})
+                    if not result['price'] and isinstance(offers, dict):
+                        result['price'] = int(offers.get('price', 0) or 0)
+                    # 이미지
+                    img_list = ld.get('image', [])
+                    if not result['image_url'] and img_list:
+                        first = img_list[0] if isinstance(img_list, list) else img_list
+                        if isinstance(first, dict):
+                            result['image_url'] = first.get('contentUrl', '')
+                        elif isinstance(first, str):
+                            result['image_url'] = first
+                    break
+            except Exception:
+                pass
 
-            if full_nf:
-                # 브랜드: schema.org Brand
-                bm = re.search(r'"brand":\{"@type":"Brand"[^}]*?"name":"([^"]+)"', full_nf)
-                if bm: result['brand'] = bm.group(1)
+        # og:image fallback
+        if not result['image_url']:
+            og_img = soup.find('meta', property='og:image')
+            if og_img: result['image_url'] = og_img.get('content', '')
 
-                # 가격: schema.org Offer
-                pm = re.search(r'"offers":\{"@type":"Offer","price":(\d+)', full_nf)
-                if pm: result['price'] = int(pm.group(1))
+        # ── 2순위: script 태그에서 itemDetails 파싱 (소재·원산지·제조연월) ──
+        # 29cm Next.js App Router: self.__next_f.push 안에 \\\"로 이스케이프된 JSON 존재
+        for s in soup.find_all('script'):
+            c = s.string or ''
+            if 'itemDetailsTitles' not in c:
+                continue
+            # BeautifulSoup .string 내 \" 이스케이프 → " 치환
+            normalized = c.replace(chr(92)+chr(34), chr(34))
+            details_map = {}
+            for m in re.finditer(
+                r'"itemDetailsTitles"\s*:\s*"([^"]+)"[^}]*?"itemDetailsValue"\s*:\s*"([^"]*)"',
+                normalized
+            ):
+                details_map[m.group(1).strip()] = m.group(2).strip()
 
-                # 이미지
-                im = re.search(r'"image":"(https://[^"]+(?:jpg|jpeg|png|webp)[^"]*)"', full_nf)
-                if im: result['image_url'] = im.group(1)
-
-                # 상품명: description 메타 (브랜드 제거)
-                nm = re.search(r'"description","content":"([^"]+)"', full_nf)
-                if nm:
-                    name_raw = nm.group(1)
-                    # "브랜드(EN) 제품명" → 제품명만 추출
-                    name_clean = re.sub(r'^[^)]+\)\s*', '', name_raw).strip()
-                    result['name'] = name_clean if name_clean else name_raw
-
-                # itemDetails: 소재, 제조국, 제조연월 등
-                all_details = re.findall(
-                    r'"itemDetailsTitles":"([^"]+)","itemDetailsValue":"([^"]+)"', full_nf
-                )
-                details_map = {}
-                for k, v in all_details:
-                    details_map[k] = v  # 중복 시 마지막 값 사용
-
-                # 소재 (composition)
+            if details_map:
+                # 소재/혼용률
                 composition = (details_map.get('제품 소재') or details_map.get('소재') or
-                               details_map.get('혼용률') or '')
+                               details_map.get('혼용률') or details_map.get('섬유의 조성 또는 혼용률') or '')
                 if composition:
                     result['fabric']['composition'] = composition
-                    # material 추론 (cotton, denim, linen 등)
-                    mat_m = re.search(r'(COTTON|DENIM|LINEN|POLYESTER|WOOL|SILK|NYLON|RAYON|TENCEL|MODAL)',
-                                      composition.upper())
+                    mat_m = re.search(
+                        r'(COTTON|DENIM|LINEN|POLYESTER|WOOL|SILK|NYLON|RAYON|TENCEL|MODAL|CASHMERE|ACRYLIC)',
+                        composition.upper()
+                    )
                     if mat_m:
                         result['fabric']['material'] = mat_m.group(1).capitalize()
 
-                # 제조국
-                origin = details_map.get('제조국', '')
+                # 원산지
+                origin = (details_map.get('제조국') or details_map.get('원산지') or
+                          details_map.get('제조국(원산지)') or '')
                 if origin: result['fabric']['origin'] = origin
 
                 # 제조연월: "202303" → "2023.03"
                 mfg_raw = details_map.get('제조연월', '')
                 if mfg_raw:
-                    mfg_m2 = re.match(r'(\d{4})(\d{2})', mfg_raw)
-                    if mfg_m2:
-                        result['mfg_date'] = f"{mfg_m2.group(1)}.{mfg_m2.group(2)}"
+                    mfg_m = re.match(r'(\d{4})(\d{2})', mfg_raw)
+                    if mfg_m:
+                        result['mfg_date'] = f"{mfg_m.group(1)}.{mfg_m.group(2)}"
+                break
 
-                # 시즌: 제목이나 텍스트에서 SS/FW 패턴
-                season_m2 = re.search(r'\b(2[0-9](?:SS|FW|AW|SU|SP))\b', full_nf)
-                if season_m2: result['season'] = season_m2.group(1)
-
-        except Exception as e:
-            pass  # fallback으로 계속
-
-        # ── 1순위: __NEXT_DATA__ JSON 파싱 (구버전 호환) ──
-        if not result['brand'] and not result['price']:
-            nd_script = soup.find('script', id='__NEXT_DATA__')
-            if nd_script:
-                try:
-                    nd = json.loads(nd_script.string or '{}')
-                    pp = nd.get('props',{}).get('pageProps',{})
-                    item = (pp.get('product') or pp.get('item') or
-                            pp.get('productDetail') or pp.get('data') or {})
-                    if not item and 'dehydratedState' in pp:
-                        queries = pp['dehydratedState'].get('queries', [])
-                        for q in queries:
-                            qdata = q.get('state',{}).get('data',{})
-                            if isinstance(qdata, dict) and (qdata.get('itemName') or qdata.get('productName')):
-                                item = qdata; break
-                    if item:
-                        if not result['name']:
-                            result['name'] = (item.get('itemName') or item.get('productName') or item.get('name',''))
-                        if not result['brand']:
-                            result['brand'] = (item.get('brandName') or item.get('brand',''))
-                        if not result['price']:
-                            pv = item.get('consumerPrice') or item.get('salePrice') or item.get('price',0)
-                            if pv: result['price'] = _safe_int(pv)
-                        for img_key in ['listImageUrl','frontImageUrl','mainImageUrl','imageUrl']:
-                            v = item.get(img_key,'')
-                            if v and not result['image_url']: result['image_url'] = v; break
-                except Exception:
-                    pass
-
-        # ── 2순위: og: 메타 태그 ──
-        if not result['name']:
-            og = soup.find('meta', property='og:title')
-            if og: result['name'] = og.get('content','').replace(' - 감도 깊은 취향 셀렉트샵 29CM','').strip()
-        if not result['image_url']:
-            og = soup.find('meta', property='og:image')
-            if og: result['image_url'] = og.get('content','')
-        if not result['price']:
-            og = soup.find('meta', property='product:price:amount')
-            if og: result['price'] = _safe_int(og.get('content','0'))
-        if not result['brand']:
-            # og:description에서 "브랜드(EN) 제품명" 패턴으로 브랜드 추출
-            og_d = soup.find('meta', property='og:description')
-            if og_d:
-                desc = og_d.get('content','')
-                bm2 = re.match(r'^(.+?)\(([A-Z0-9]+)\)\s+', desc)
-                if bm2: result['brand'] = bm2.group(1).strip()
-
-        # ── 3순위: 전체 텍스트에서 원단·시즌 추출 ──
-        if not result['fabric']['composition']:
-            fab = _extract_fabric(page_text)
-            if fab['composition'] or fab['material']:
-                result['fabric'] = fab
+        # ── 3순위: 시즌 추출 (전체 텍스트) ──
+        page_text = soup.get_text(' ', strip=True)
         if not result['season']:
             result['season'] = _extract_season(page_text)
 
-        # ── 가격 텍스트 fallback ──
-        if not result['price']:
-            for m in re.finditer(r'[\d,]{5,}', page_text):
-                v = _safe_int(m.group())
-                if 5000 <= v <= 5000000:
-                    result['price'] = v; break
+        # ── 4순위: 소재 텍스트 fallback ──
+        if not result['fabric']['composition']:
+            fab = _extract_fabric(page_text)
+            if fab.get('composition') or fab.get('material'):
+                result['fabric'] = fab
 
         result['success'] = True
 
