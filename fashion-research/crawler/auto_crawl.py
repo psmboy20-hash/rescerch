@@ -155,74 +155,123 @@ def _crawl_29cm_requests(url: str) -> dict:
 
         soup = BeautifulSoup(resp.text, 'html.parser')
         page_text = soup.get_text(' ', strip=True)
+        raw_text = resp.text
 
-        # ── 1순위: __NEXT_DATA__ JSON 파싱 ──
-        nd_script = soup.find('script', id='__NEXT_DATA__')
-        if nd_script:
-            try:
-                nd = json.loads(nd_script.string or '{}')
-                pp = nd.get('props',{}).get('pageProps',{})
+        # ── 0순위: __next_f 청크 파싱 (Next.js App Router 방식) ──
+        # 29cm은 __NEXT_DATA__ 대신 self.__next_f.push 방식으로 데이터 전달
+        try:
+            chunks = re.findall(r'self\.__next_f\.push\(\[1,"(.+?)"\]\)', raw_text, re.DOTALL)
+            full_nf = ''
+            for chunk in chunks:
+                try:
+                    full_nf += json.loads(f'"{chunk}"')
+                except:
+                    full_nf += chunk
 
-                # 제품 데이터 위치 탐색 (사이트 구조에 따라 다름)
-                item = (pp.get('product') or pp.get('item') or
-                        pp.get('productDetail') or pp.get('data') or {})
-                if not item and 'dehydratedState' in pp:
-                    # React Query 캐시에서 추출
-                    queries = pp['dehydratedState'].get('queries', [])
-                    for q in queries:
-                        qdata = q.get('state',{}).get('data',{})
-                        if isinstance(qdata, dict) and (qdata.get('itemName') or qdata.get('productName')):
-                            item = qdata
-                            break
+            if full_nf:
+                # 브랜드: schema.org Brand
+                bm = re.search(r'"brand":\{"@type":"Brand"[^}]*?"name":"([^"]+)"', full_nf)
+                if bm: result['brand'] = bm.group(1)
 
-                if item:
-                    result['name'] = (item.get('itemName') or item.get('productName') or
-                                      item.get('name') or result['name'])
-                    result['brand'] = (item.get('brandName') or item.get('brand') or
-                                       item.get('brandNameEn') or result['brand'])
-                    price_val = (item.get('consumerPrice') or item.get('salePrice') or
-                                 item.get('price') or item.get('sellPrice') or 0)
-                    if price_val: result['price'] = _safe_int(price_val)
+                # 가격: schema.org Offer
+                pm = re.search(r'"offers":\{"@type":"Offer","price":(\d+)', full_nf)
+                if pm: result['price'] = int(pm.group(1))
 
-                    # 이미지: 여러 키 시도
-                    for img_key in ['listImageUrl','frontImageUrl','mainImageUrl','imageUrl','image']:
-                        v = item.get(img_key,'')
-                        if v: result['image_url'] = v; break
+                # 이미지
+                im = re.search(r'"image":"(https://[^"]+(?:jpg|jpeg|png|webp)[^"]*)"', full_nf)
+                if im: result['image_url'] = im.group(1)
 
-                    # 원단 정보: frontDetail, productInfo, materialInfo 등
-                    for detail_key in ['frontDetail','detailContent','productInfo','materialInfo','itemInfo','description']:
-                        detail_html = item.get(detail_key,'')
-                        if detail_html:
-                            detail_text = BeautifulSoup(str(detail_html), 'html.parser').get_text(' ')
-                            fab = _extract_fabric(detail_text)
-                            if fab['composition'] or fab['material']:
-                                result['fabric'] = fab
-                                result['season'] = result['season'] or _extract_season(detail_text)
-                                break
+                # 상품명: description 메타 (브랜드 제거)
+                nm = re.search(r'"description","content":"([^"]+)"', full_nf)
+                if nm:
+                    name_raw = nm.group(1)
+                    # "브랜드(EN) 제품명" → 제품명만 추출
+                    name_clean = re.sub(r'^[^)]+\)\s*', '', name_raw).strip()
+                    result['name'] = name_clean if name_clean else name_raw
 
-                    # 시즌 태그 별도 필드
-                    for sk in ['season','seasonCode','tags']:
-                        v = item.get(sk,'')
-                        if v and isinstance(v, str):
-                            s = _extract_season(v) or v.upper()
-                            if s: result['season'] = s; break
-            except Exception as e:
-                result['error'] = f'__NEXT_DATA__ 파싱 오류: {e}'
+                # itemDetails: 소재, 제조국, 제조연월 등
+                all_details = re.findall(
+                    r'"itemDetailsTitles":"([^"]+)","itemDetailsValue":"([^"]+)"', full_nf
+                )
+                details_map = {}
+                for k, v in all_details:
+                    details_map[k] = v  # 중복 시 마지막 값 사용
+
+                # 소재 (composition)
+                composition = (details_map.get('제품 소재') or details_map.get('소재') or
+                               details_map.get('혼용률') or '')
+                if composition:
+                    result['fabric']['composition'] = composition
+                    # material 추론 (cotton, denim, linen 등)
+                    mat_m = re.search(r'(COTTON|DENIM|LINEN|POLYESTER|WOOL|SILK|NYLON|RAYON|TENCEL|MODAL)',
+                                      composition.upper())
+                    if mat_m:
+                        result['fabric']['material'] = mat_m.group(1).capitalize()
+
+                # 제조국
+                origin = details_map.get('제조국', '')
+                if origin: result['fabric']['origin'] = origin
+
+                # 제조연월: "202303" → "2023.03"
+                mfg_raw = details_map.get('제조연월', '')
+                if mfg_raw:
+                    mfg_m2 = re.match(r'(\d{4})(\d{2})', mfg_raw)
+                    if mfg_m2:
+                        result['mfg_date'] = f"{mfg_m2.group(1)}.{mfg_m2.group(2)}"
+
+                # 시즌: 제목이나 텍스트에서 SS/FW 패턴
+                season_m2 = re.search(r'\b(2[0-9](?:SS|FW|AW|SU|SP))\b', full_nf)
+                if season_m2: result['season'] = season_m2.group(1)
+
+        except Exception as e:
+            pass  # fallback으로 계속
+
+        # ── 1순위: __NEXT_DATA__ JSON 파싱 (구버전 호환) ──
+        if not result['brand'] and not result['price']:
+            nd_script = soup.find('script', id='__NEXT_DATA__')
+            if nd_script:
+                try:
+                    nd = json.loads(nd_script.string or '{}')
+                    pp = nd.get('props',{}).get('pageProps',{})
+                    item = (pp.get('product') or pp.get('item') or
+                            pp.get('productDetail') or pp.get('data') or {})
+                    if not item and 'dehydratedState' in pp:
+                        queries = pp['dehydratedState'].get('queries', [])
+                        for q in queries:
+                            qdata = q.get('state',{}).get('data',{})
+                            if isinstance(qdata, dict) and (qdata.get('itemName') or qdata.get('productName')):
+                                item = qdata; break
+                    if item:
+                        if not result['name']:
+                            result['name'] = (item.get('itemName') or item.get('productName') or item.get('name',''))
+                        if not result['brand']:
+                            result['brand'] = (item.get('brandName') or item.get('brand',''))
+                        if not result['price']:
+                            pv = item.get('consumerPrice') or item.get('salePrice') or item.get('price',0)
+                            if pv: result['price'] = _safe_int(pv)
+                        for img_key in ['listImageUrl','frontImageUrl','mainImageUrl','imageUrl']:
+                            v = item.get(img_key,'')
+                            if v and not result['image_url']: result['image_url'] = v; break
+                except Exception:
+                    pass
 
         # ── 2순위: og: 메타 태그 ──
         if not result['name']:
             og = soup.find('meta', property='og:title')
-            if og: result['name'] = og.get('content','').strip()
+            if og: result['name'] = og.get('content','').replace(' - 감도 깊은 취향 셀렉트샵 29CM','').strip()
         if not result['image_url']:
             og = soup.find('meta', property='og:image')
             if og: result['image_url'] = og.get('content','')
         if not result['price']:
             og = soup.find('meta', property='product:price:amount')
-            if og:
-                result['price'] = _safe_int(og.get('content','0'))
+            if og: result['price'] = _safe_int(og.get('content','0'))
         if not result['brand']:
-            og = soup.find('meta', property='product:brand')
-            if og: result['brand'] = og.get('content','')
+            # og:description에서 "브랜드(EN) 제품명" 패턴으로 브랜드 추출
+            og_d = soup.find('meta', property='og:description')
+            if og_d:
+                desc = og_d.get('content','')
+                bm2 = re.match(r'^(.+?)\(([A-Z0-9]+)\)\s+', desc)
+                if bm2: result['brand'] = bm2.group(1).strip()
 
         # ── 3순위: 전체 텍스트에서 원단·시즌 추출 ──
         if not result['fabric']['composition']:
@@ -275,68 +324,83 @@ def _crawl_wconcept_requests(url: str) -> dict:
 
         soup = BeautifulSoup(resp.text, 'html.parser')
         page_text = soup.get_text(' ', strip=True)
+        raw_text = resp.text
 
-        # ── __NEXT_DATA__ ──
-        nd_script = soup.find('script', id='__NEXT_DATA__')
-        if nd_script:
-            try:
-                nd = json.loads(nd_script.string or '{}')
-                pp = nd.get('props',{}).get('pageProps',{})
-                item = (pp.get('product') or pp.get('item') or
-                        pp.get('productDetail') or pp.get('data') or {})
-                if not item and 'dehydratedState' in pp:
-                    queries = pp['dehydratedState'].get('queries', [])
-                    for q in queries:
-                        qdata = q.get('state',{}).get('data',{})
-                        if isinstance(qdata, dict) and (qdata.get('productName') or qdata.get('name')):
-                            item = qdata; break
+        # ── 존재하지 않는 상품 체크 ──
+        if '존재하지 않는 상품' in raw_text or len(raw_text) < 500:
+            result['error'] = '존재하지 않는 상품'
+            return result
 
-                if item:
-                    result['name'] = (item.get('productName') or item.get('itemName') or
-                                      item.get('name') or '')
-                    result['brand'] = (item.get('brandName') or item.get('brand') or '')
-                    price_val = (item.get('salePrice') or item.get('consumerPrice') or
-                                 item.get('price') or 0)
-                    if price_val: result['price'] = _safe_int(price_val)
+        # ── 0순위: og:description에서 브랜드·제품명 추출 ──
+        # W컨셉 패턴: "[브랜드EN 브랜드KO] 제품명 (품번)"
+        og_desc = soup.find('meta', property='og:description')
+        if og_desc:
+            desc = og_desc.get('content', '')
+            m = re.match(r'\[([^\]]+)\]\s*(.*)', desc)
+            if m:
+                brand_raw = m.group(1)  # "jsny 제이에스엔와이"
+                prod_name = re.sub(r'\s*\([A-Z0-9\-]+\)\s*$', '', m.group(2)).strip()
+                # 한글 브랜드명 우선
+                ko_m = re.search(r'[가-힣][가-힣\s]+', brand_raw)
+                result['brand'] = ko_m.group().strip() if ko_m else brand_raw.strip()
+                result['name'] = prod_name
 
-                    for img_key in ['mainImageUrl','listImageUrl','frontImageUrl','imageUrl','image']:
-                        v = item.get(img_key,'')
-                        if v: result['image_url'] = v; break
+        # ── 1순위: HTML h2.brand > a 태그에서 브랜드 ──
+        if not result['brand']:
+            brand_h2 = soup.find('h2', class_='brand')
+            if brand_h2:
+                a = brand_h2.find('a')
+                result['brand'] = a.get_text(strip=True) if a else brand_h2.get_text(strip=True)
 
-                    for detail_key in ['detailContent','productInfo','materialInfo','description','content']:
-                        detail_html = item.get(detail_key,'')
-                        if detail_html:
-                            detail_text = BeautifulSoup(str(detail_html), 'html.parser').get_text(' ')
-                            fab = _extract_fabric(detail_text)
-                            if fab['composition'] or fab['material']:
-                                result['fabric'] = fab
-                                result['season'] = result['season'] or _extract_season(detail_text)
-                                break
-            except Exception as e:
-                pass  # og: fallback으로 진행
-
-        # og: 메타 fallback
+        # ── 2순위: og:title에서 제품명 ──
         if not result['name']:
-            og = soup.find('meta', property='og:title')
-            if og: result['name'] = og.get('content','').strip()
-        if not result['image_url']:
-            og = soup.find('meta', property='og:image')
-            if og: result['image_url'] = og.get('content','')
-        if not result['price']:
-            for el in soup.find_all(class_=re.compile(r'price', re.I)):
-                nums = re.findall(r'[\d,]+', el.get_text())
-                for n in nums:
-                    v = _safe_int(n)
-                    if 5000 <= v <= 5000000:
-                        result['price'] = v; break
-                if result['price']: break
+            og_t = soup.find('meta', property='og:title')
+            if og_t:
+                title = og_t.get('content','').replace('[W CONCEPT]','').strip()
+                result['name'] = title
 
-        if not result['fabric']['composition']:
-            fab = _extract_fabric(page_text)
-            if fab['composition'] or fab['material']:
-                result['fabric'] = fab
+        # ── 3순위: og:image 이미지 ──
+        if not result['image_url']:
+            og_i = soup.find('meta', property='og:image')
+            if og_i: result['image_url'] = og_i.get('content','')
+
+        # ── 4순위: dt/dd 구조에서 가격 추출 ──
+        # W컨셉: <dt>정상가</dt><dd><em>399,000</em> 원</dd>
+        for dt in soup.find_all('dt'):
+            label = dt.get_text(strip=True)
+            if label in ['정상가', '판매가']:
+                dd = dt.find_next('dd')
+                if dd:
+                    val = re.sub(r'[^\d]', '', dd.get_text())
+                    if val:
+                        v = int(val)
+                        if 1000 <= v <= 10000000:
+                            result['price'] = v
+                            break
+
+        # ── 5순위: JSON 인라인 데이터 (brandName 등) ──
+        brand_m = re.findall(r'"brandNameKo"\s*:\s*"([^"]+)"', raw_text)
+        if brand_m and not result['brand']:
+            result['brand'] = brand_m[0]
+
+        # 소재: HTML body text에서 혼용률 패턴
+        fabric_pattern = re.findall(
+            r'((?:COTTON|POLYESTER|NYLON|WOOL|LINEN|RAYON|SILK|TENCEL|MODAL|ACRYLIC|VISCOSE)'
+            r'(?:\s*/\s*(?:COTTON|POLYESTER|NYLON|WOOL|LINEN|RAYON|SILK|TENCEL|MODAL|ACRYLIC|VISCOSE))*'
+            r'\s*\d+%(?:\s*,?\s*(?:COTTON|POLYESTER|NYLON|WOOL|LINEN|RAYON|SILK|TENCEL|MODAL|ACRYLIC|VISCOSE)\s*\d+%)*)',
+            page_text, re.I
+        )
+        if fabric_pattern:
+            result['fabric']['composition'] = fabric_pattern[0]
+            mat_m = re.search(r'(COTTON|DENIM|LINEN|POLYESTER|WOOL|SILK|NYLON|RAYON|TENCEL|MODAL)',
+                              fabric_pattern[0].upper())
+            if mat_m: result['fabric']['material'] = mat_m.group(1).capitalize()
+
+        # 시즌
         if not result['season']:
             result['season'] = _extract_season(page_text)
+
+        # 가격 최종 fallback
         if not result['price']:
             for m in re.finditer(r'[\d,]{5,}', page_text):
                 v = _safe_int(m.group())
