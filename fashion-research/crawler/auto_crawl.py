@@ -91,21 +91,48 @@ def _extract_season(text: str) -> str:
 # ══════════════════════════════════════════════════════════════════
 
 def crawl_29cm_product(url: str) -> dict:
+    # requests 우선 사용 (playwright는 서버 환경에서 hang 발생)
+    d = _crawl_29cm_requests(url)
+    if d.get('success'):
+        return d
+    # requests 실패 시에만 playwright 시도 (3초 타임아웃)
     try:
-        from crawler.playwright_crawl import crawl_29cm_product as _pw
-        return _pw(url)
+        import signal
+        def _timeout_handler(signum, frame):
+            raise TimeoutError('playwright timeout')
+        signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.alarm(30)
+        try:
+            from crawler.playwright_crawl import crawl_29cm_product as _pw
+            result = _pw(url)
+        finally:
+            signal.alarm(0)
+        return result
     except Exception:
         pass
-    # ── Playwright 없을 때 requests fallback ──
-    return _crawl_29cm_requests(url)
+    return d  # requests 결과 반환 (실패여도)
 
 def crawl_wconcept_product(url: str) -> dict:
+    # requests 우선 사용 (playwright는 서버 환경에서 hang 발생)
+    d = _crawl_wconcept_requests(url)
+    if d.get('success'):
+        return d
+    # requests 실패 시에만 playwright 시도 (30초 타임아웃)
     try:
-        from crawler.playwright_crawl import crawl_wconcept_product as _pw
-        return _pw(url)
+        import signal
+        def _timeout_handler(signum, frame):
+            raise TimeoutError('playwright timeout')
+        signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.alarm(30)
+        try:
+            from crawler.playwright_crawl import crawl_wconcept_product as _pw
+            result = _pw(url)
+        finally:
+            signal.alarm(0)
+        return result
     except Exception:
         pass
-    return _crawl_wconcept_requests(url)
+    return d  # requests 결과 반환 (실패여도)
 
 def _crawl_29cm_requests(url: str) -> dict:
     result = {
@@ -333,12 +360,25 @@ def _crawl_wconcept_requests(url: str) -> dict:
 # ══════════════════════════════════════════════════════════════════
 
 def crawl_naver_blog_count(query: str, client_id: str='', client_secret: str='') -> int:
-    try:
-        from crawler.playwright_crawl import crawl_naver_blog_count_pw
-        return crawl_naver_blog_count_pw(query, client_id, client_secret)
-    except Exception:
-        pass
-    # requests fallback
+    # 1순위: 네이버 공식 API (playwright 제거 - hang 발생)
+    if client_id and client_secret:
+        try:
+            import requests as _req
+            r = _req.get(
+                'https://openapi.naver.com/v1/search/blog.json',
+                params={'query': query, 'display': 1},
+                headers={
+                    'X-Naver-Client-Id': client_id,
+                    'X-Naver-Client-Secret': client_secret
+                },
+                timeout=8
+            )
+            d = r.json()
+            if 'total' in d:
+                return int(d['total'])
+        except Exception:
+            pass
+    # 2순위: requests 크롤링 fallback
     try:
         sess = make_session()
         r = sess.get(
@@ -358,12 +398,9 @@ def crawl_naver_blog_count(query: str, client_id: str='', client_secret: str='')
 # ══════════════════════════════════════════════════════════════════
 
 def crawl_instagram_hashtag(keyword: str) -> int:
-    try:
-        from crawler.playwright_crawl import crawl_instagram_count_pw
-        r = crawl_instagram_count_pw(keyword)
-        return r.get('count', 0)
-    except Exception:
-        pass
+    # playwright는 서버 환경에서 hang 발생
+    # Instagram 분석은 전용 분석 페이지에서 agent로 처리
+    # 업데이트 센터에서는 0 반환 (score_instagram은 수동 입력 또는 분석 페이지 이용)
     return 0
 
 
