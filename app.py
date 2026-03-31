@@ -492,7 +492,12 @@ elif page == "📸 Instagram 분석":
             fig.update_xaxes(tickangle=-45)
             st.plotly_chart(fig, use_container_width=True)
 
-        st.dataframe(ig_df[["hashtag", "account", "likes", "comments", "posted_at", "caption"]], use_container_width=True)
+        # 컬럼 존재 여부 확인 후 표시
+        display_cols = [c for c in ["hashtag", "account", "likes", "comments", "posted_at", "caption"] if c in ig_df.columns]
+        if display_cols:
+            st.dataframe(ig_df[display_cols], use_container_width=True)
+        else:
+            st.dataframe(ig_df, use_container_width=True)
 
         # 스크린샷 갤러리
         screenshots = ig_df["screenshot_path"].dropna().tolist()
@@ -680,6 +685,37 @@ elif page == "⚙️ 설정":
 
     st.markdown("---")
     st.markdown("**📦 Playwright 브라우저 설치**")
-    st.code("playwright install chromium", language="bash")
+    st.code("py -3.11 -m playwright install chromium", language="bash")
     st.markdown("**▶ 앱 실행 명령어**")
-    st.code("streamlit run app.py", language="bash")
+    st.code("py -3.11 -m streamlit run app.py", language="bash")
+
+    st.markdown("---")
+    st.markdown("**🔑 Instagram 세션 관리**")
+    col_ig1, col_ig2 = st.columns(2)
+    with col_ig1:
+        ig_user = st.text_input("Instagram ID", value=os.getenv("INSTAGRAM_USERNAME", ""))
+        ig_pass = st.text_input("Instagram PW", type="password", value=os.getenv("INSTAGRAM_PASSWORD", ""))
+        if st.button("💾 저장 + 쿠키 갱신"):
+            # .env 업데이트
+            import re as _re
+            env_path = ".env"
+            env_text = open(env_path).read() if os.path.exists(env_path) else ""
+            for key, val in [("INSTAGRAM_USERNAME", ig_user), ("INSTAGRAM_PASSWORD", ig_pass)]:
+                if key in env_text:
+                    env_text = _re.sub(rf'{key}=.*', f'{key}={val}', env_text)
+                else:
+                    env_text += f"\n{key}={val}"
+            with open(env_path, "w") as f:
+                f.write(env_text)
+            # 기존 쿠키 삭제 (재로그인 강제)
+            cookie_file = "./exports/instagram_cookies.json"
+            if os.path.exists(cookie_file):
+                os.remove(cookie_file)
+            st.success("✅ 저장 완료. 다음 Instagram 분석 시 새로 로그인합니다.")
+    with col_ig2:
+        cookie_exists = os.path.exists("./exports/instagram_cookies.json")
+        st.markdown(f"**세션 쿠키:** {'🟢 저장됨 (로그인 유지)' if cookie_exists else '⚪ 없음 (로그인 필요)'}")
+        if cookie_exists and st.button("🗑️ 쿠키 삭제 (재로그인)"):
+            os.remove("./exports/instagram_cookies.json")
+            st.success("✅ 쿠키 삭제. 다음 실행 시 재로그인합니다.")
+            st.rerun()

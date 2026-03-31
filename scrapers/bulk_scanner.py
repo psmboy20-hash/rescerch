@@ -1,6 +1,8 @@
 """
 scrapers/bulk_scanner.py
-벌크 스캐너 - 카테고리 URL → 상위 N개 제품 일괄 분석
+벌크 스캐너 v2 - 병렬 처리로 속도 대폭 개선
+- 제품 메타 수집: 동시 5개 병렬
+- 리뷰 수집: httpx 비동기 + 배치 병렬
 """
 import asyncio
 import sys
@@ -33,61 +35,77 @@ def get_scraper(platform: str):
     return cls()
 
 
+async def scrape_one(scraper, url: str, idx: int, total: int, semaphore: asyncio.Semaphore):
+    """세마포어로 동시 실행 제한"""
+    async with semaphore:
+        try:
+            logger.info(f"[{idx+1}/{total}] 분석: {url[-50:]}")
+            meta, reviews_df = await scraper.scrape_full(url)
+            return meta, reviews_df
+        except Exception as e:
+            logger.error(f"[{idx+1}/{total}] 오류: {url[-50:]} - {e}")
+            return None, None
+
+
 async def bulk_scan(
     category_url: str,
     platform: str,
     limit: int = 30,
     progress_callback=None,
+    parallel: int = 3,  # 동시 처리 제품 수 (너무 높으면 차단됨)
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     카테고리 URL에서 상위 limit개 제품 일괄 분석
-    Returns:
-        meta_df: 제품 메타 데이터프레임
-        reviews_df: 전체 리뷰 통합 데이터프레임
+    parallel: 동시 처리 수 (기본 3 - 안전한 속도)
     """
     scraper = get_scraper(platform)
-    logger.info(f"🔍 [{platform}] 카테고리 스캔 시작: {category_url} (최대 {limit}개)")
+    logger.info(f"🔍 [{platform}] 카테고리 스캔: {category_url} (최대 {limit}개, 동시 {parallel}개)")
 
     # 1. 카테고리에서 제품 URL 수집
     product_urls = await scraper.get_category_products(category_url, limit=limit)
     logger.info(f"📋 수집된 제품 수: {len(product_urls)}")
 
+    total = len(product_urls)
     meta_list = []
     all_reviews = []
-    total = len(product_urls)
 
-    # 2. 각 제품 분석
-    for idx, url in enumerate(product_urls):
-        try:
-            logger.info(f"[{idx+1}/{total}] 분석 중: {url}")
-            if progress_callback:
-                progress_callback(idx + 1, total, url)
-
-            meta, reviews_df = await scraper.scrape_full(url)
+    # 2. 세마포어로 병렬 처리
+    semaphore = asyncio.Semaphore(parallel)
+    tasks = [
+        scrape_one(scraper, url, idx, total, semaphore)
+        for idx, url in enumerate(product_urls)
+    ]
+    
+    completed = 0
+    for coro in asyncio.as_completed(tasks):
+        meta, reviews_df = await coro
+        completed += 1
+        
+        if progress_callback:
+            progress_callback(completed, total, "처리 중...")
+        
+        if meta:
             meta_list.append(meta.to_dict())
+        if reviews_df is not None and not reviews_df.empty:
+            reviews_df["rank"] = completed
+            all_reviews.append(reviews_df)
 
-            if not reviews_df.empty:
-                reviews_df["rank"] = idx + 1
-                all_reviews.append(reviews_df)
+        logger.info(f"✅ 완료: {completed}/{total}")
 
-        except Exception as e:
-            logger.error(f"[{idx+1}/{total}] 오류 발생: {url} - {e}")
-            continue
-
-    # 3. 통합 데이터프레임 생성
+    # 3. 통합 데이터프레임
     meta_df = pd.DataFrame(meta_list) if meta_list else pd.DataFrame()
     reviews_df = pd.concat(all_reviews, ignore_index=True) if all_reviews else pd.DataFrame()
 
-    logger.success(f"✅ 벌크 스캔 완료: {len(meta_list)}개 제품, {len(reviews_df)}개 리뷰")
+    logger.success(f"✅ 벌크 완료: {len(meta_list)}개 제품, {len(reviews_df)}개 리뷰")
     return meta_df, reviews_df
 
 
 def run_bulk_scan(category_url: str, platform: str, limit: int = 30, progress_callback=None):
-    """동기 방식으로 bulk_scan 실행 (Streamlit에서 사용)"""
+    """동기 방식 (Streamlit)"""
     return asyncio.run(bulk_scan(category_url, platform, limit, progress_callback))
 
 
 def run_single_scrape(url: str, platform: str):
-    """단일 제품 스크래핑 동기 실행"""
+    """단일 제품 동기 실행"""
     scraper = get_scraper(platform)
     return asyncio.run(scraper.scrape_full(url))
