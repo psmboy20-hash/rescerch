@@ -16,10 +16,18 @@ import asyncio
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-# ─── 벌크 스캔 전역 상태 ──────────────────────────────────────────
+# ─── 전역 상태 ───────────────────────────────────────────────────
 BULK_LOG = []
 BULK_RUNNING = False
 BULK_RESULT = {'meta': [], 'reviews': []}  # 최신 스캔 결과
+
+IG_LOG = []
+IG_RUNNING = False
+IG_RESULT = {'posts': [], 'keywords': [], 'accounts': []}
+
+YT_LOG = []
+YT_RUNNING = False
+YT_RESULT = {'videos': []}
 
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR    = os.path.join(BASE_DIR, 'data')
@@ -171,7 +179,9 @@ class Handler(BaseHTTPRequestHandler):
 
         elif path == '/api/settings':
             s = load_json(SETTINGS_FILE)
-            if s.get('naver_client_secret'): s['naver_client_secret'] = '••••••••'
+            # 민감 필드 마스킹
+            for secret_key in ['naver_client_secret', 'instagram_password', 'openai_api_key', 'youtube_api_key']:
+                if s.get(secret_key): s[secret_key] = '••••••••'
             self.send_json(s)
 
         # 제품 상세
@@ -197,6 +207,14 @@ class Handler(BaseHTTPRequestHandler):
         # ── 시장 반응 속도 조회 ──
         elif path == '/api/market-response':
             self.send_json(_get_market_response_data())
+
+        # ── Instagram 분석 로그 폴링 ──
+        elif path == '/api/instagram/log':
+            self.send_json({'logs': IG_LOG, 'running': IG_RUNNING, 'result': IG_RESULT})
+
+        # ── YouTube 트렌드 로그 폴링 ──
+        elif path == '/api/youtube/log':
+            self.send_json({'logs': YT_LOG, 'running': YT_RUNNING, 'result': YT_RESULT})
 
         else:
             self.send_response(404); self.end_headers()
@@ -331,15 +349,6 @@ class Handler(BaseHTTPRequestHandler):
                 t.start()
                 self.send_json({'success':True,'message':f'{pid} 크롤링 시작'})
 
-        elif path == '/api/settings':
-            s = load_json(SETTINGS_FILE)
-            if 'naver_client_id' in data: s['naver_client_id'] = data['naver_client_id']
-            if 'naver_client_secret' in data and data['naver_client_secret'] != '••••••••':
-                s['naver_client_secret'] = data['naver_client_secret']
-            if 'score_weights' in data: s['score_weights'] = data['score_weights']
-            save_json(SETTINGS_FILE, s)
-            self.send_json({'success':True})
-
         # ── 벌크 스캔 시작 ──
         elif path == '/api/bulk/start':
             global BULK_RUNNING
@@ -359,6 +368,90 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 t.start()
                 self.send_json({'success': True, 'message': f'벌크 스캔 시작 ({platform}, 최대 {limit}개)'})
+
+        # ── 벌크 결과 → products.json 저장 ──
+        elif path == '/api/bulk/save':
+            items = data.get('items', [])
+            if not items:
+                self.send_json({'success': False, 'error': '저장할 항목이 없습니다'})
+                return
+            added = _save_bulk_to_products(items)
+            self.send_json({'success': True, 'added': added})
+
+        # ── Instagram 분석 시작 ──
+        elif path == '/api/instagram/start':
+            global IG_RUNNING
+            if IG_RUNNING:
+                self.send_json({'success': False, 'message': '이미 분석 중입니다'})
+            else:
+                hashtag   = data.get('hashtag', '').strip().lstrip('#')
+                max_posts = int(data.get('max_posts', 20))
+                if not hashtag:
+                    self.send_json({'success': False, 'error': 'hashtag이 필요합니다'})
+                    return
+                t = threading.Thread(
+                    target=run_instagram_bg,
+                    args=(hashtag, max_posts),
+                    daemon=True
+                )
+                t.start()
+                self.send_json({'success': True, 'message': f'#{hashtag} 분석 시작 (최대 {max_posts}개)'})
+
+        # ── Instagram 결과 → score_instagram 업데이트 ──
+        elif path == '/api/instagram/apply':
+            pid   = data.get('product_id', '')
+            count = int(data.get('count', 0))
+            if pid:
+                products = load_json(PRODUCTS_FILE)
+                for p in products:
+                    if p['id'] == pid:
+                        p['score_instagram'] = count
+                        p['updated_date'] = date.today().isoformat()
+                        break
+                save_json(PRODUCTS_FILE, products)
+                self.send_json({'success': True})
+            else:
+                self.send_json({'success': False, 'error': 'product_id 필요'})
+
+        # ── YouTube 트렌드 검색 시작 ──
+        elif path == '/api/youtube/start':
+            global YT_RUNNING
+            if YT_RUNNING:
+                self.send_json({'success': False, 'message': '이미 검색 중입니다'})
+            else:
+                keyword     = data.get('keyword', '').strip()
+                max_results = int(data.get('max_results', 15))
+                get_comments = bool(data.get('get_comments', False))
+                if not keyword:
+                    self.send_json({'success': False, 'error': 'keyword가 필요합니다'})
+                    return
+                t = threading.Thread(
+                    target=run_youtube_bg,
+                    args=(keyword, max_results, get_comments),
+                    daemon=True
+                )
+                t.start()
+                self.send_json({'success': True, 'message': f'"{keyword}" YouTube 검색 시작'})
+
+        # ── Settings 저장 (확장) ──
+        elif path == '/api/settings':
+            s = load_json(SETTINGS_FILE)
+            safe_fields = [
+                'naver_client_id', 'score_weights',
+                'openai_api_key', 'youtube_api_key',
+                'instagram_username', 'headless_mode',
+                'scrape_delay_min', 'scrape_delay_max', 'max_pages'
+            ]
+            for f in safe_fields:
+                if f in data:
+                    s[f] = data[f]
+            # secret 필드 마스킹 처리
+            if 'naver_client_secret' in data and data['naver_client_secret'] != '••••••••':
+                s['naver_client_secret'] = data['naver_client_secret']
+            if 'instagram_password' in data and data['instagram_password'] != '••••••••':
+                s['instagram_password'] = data['instagram_password']
+            save_json(SETTINGS_FILE, s)
+            self.send_json({'success': True})
 
         else:
             self.send_response(404); self.end_headers()
@@ -706,11 +799,14 @@ def run_bulk_scan_bg(category_url: str, platform: str, limit: int):
             sys.path.insert(0, base)
 
         from scrapers.bulk_scanner import run_bulk_scan
+        # bulk_scanner의 callback은 (completed, total, msg) 3인자를 받음
+        def _bulk_cb(completed, total, msg):
+            log(f"[{completed}/{total}] {msg}")
         meta_df, reviews_df = run_bulk_scan(
             category_url=category_url,
             platform=platform,
             limit=limit,
-            progress_callback=log
+            progress_callback=_bulk_cb
         )
 
         if meta_df is not None and not meta_df.empty:
@@ -775,6 +871,204 @@ def run_bulk_scan_bg(category_url: str, platform: str, limit: int):
         BULK_RUNNING = False
 
 
+# ─── 벌크 결과 → products.json 저장 ───────────────────────────────
+def _save_bulk_to_products(items: list) -> int:
+    """벌크 스캔 결과를 products.json에 추가 (중복 URL 체크)"""
+    products = load_json(PRODUCTS_FILE)
+    settings = load_json(SETTINGS_FILE)
+    added = 0
+    existing_urls = set()
+    for p in products:
+        if p.get('url_29cm'):     existing_urls.add(p['url_29cm'])
+        if p.get('url_wconcept'): existing_urls.add(p['url_wconcept'])
+
+    for item in items:
+        url = item.get('url', '')
+        if url and url in existing_urls:
+            continue  # 이미 있는 제품 skip
+        platform = item.get('platform', '')
+        new_p = {
+            'id': f"p{uuid.uuid4().hex[:8]}",
+            'brand_name': item.get('brand', ''),
+            'name': item.get('name', ''),
+            'category': _guess_category(url, item.get('name', '')),
+            'season': '',
+            'price': int(item.get('price') or 0),
+            'url_29cm':     url if platform == '29cm' else '',
+            'url_wconcept': url if platform == 'wconcept' else '',
+            'image_url': item.get('image_url', ''),
+            'fabric': {'material': '', 'composition': '', 'weight': '', 'origin': ''},
+            'mfg_date': item.get('manufacture_date', ''),
+            'score_29cm':     int(item.get('review_count', 0)) if platform == '29cm' else 0,
+            'score_wconcept': int(item.get('review_count', 0)) if platform == 'wconcept' else 0,
+            'score_naver': 0, 'score_instagram': 0,
+            'total_score': 0, 'rank': 0, 'rank_all': 0, 'prev_rank': 0,
+            'buzz': False,
+            'added_date': date.today().isoformat(),
+            'updated_date': date.today().isoformat(),
+            'review_history': []
+        }
+        if url: existing_urls.add(url)
+        products.append(new_p)
+        added += 1
+
+    if added > 0:
+        products = calculate_rankings(products, settings)
+        save_json(PRODUCTS_FILE, products)
+    return added
+
+
+# ─── Instagram 백그라운드 분석 ────────────────────────────────────
+def run_instagram_bg(hashtag: str, max_posts: int):
+    global IG_LOG, IG_RUNNING, IG_RESULT
+    IG_LOG = []
+    IG_RUNNING = True
+    IG_RESULT = {'posts': [], 'keywords': [], 'accounts': []}
+    log = lambda msg: IG_LOG.append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+
+    log(f"📸 #{hashtag} Instagram 분석 시작 (최대 {max_posts}개)")
+
+    try:
+        import sys, os
+        base = os.path.dirname(os.path.abspath(__file__))
+        if base not in sys.path:
+            sys.path.insert(0, base)
+
+        # 설정에서 계정 정보 읽기
+        settings = load_json(SETTINGS_FILE)
+        ig_user = settings.get('instagram_username', 'jellygogo1')
+        ig_pass = settings.get('instagram_password', 'tjdan1020123!!')
+
+        # 환경변수 주입 (agent가 os.getenv로 읽음)
+        os.environ['INSTAGRAM_USERNAME'] = ig_user
+        os.environ['INSTAGRAM_PASSWORD'] = ig_pass
+        os.environ['INSTAGRAM_COOKIE_FILE'] = os.path.join(base, 'data', 'instagram_cookies.json')
+
+        from agents.instagram_agent import InstagramAgent
+        agent = InstagramAgent(username=ig_user, password=ig_pass)
+
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        posts = loop.run_until_complete(agent.search_hashtag(hashtag, max_posts=max_posts))
+        loop.close()
+
+        log(f"✅ 포스트 {len(posts)}개 수집 완료")
+
+        # 직렬화
+        post_dicts = []
+        for p in posts:
+            d = p.to_dict()
+            # screenshot_path 제거 (JSON 직렬화 가능하게)
+            d.pop('screenshot_path', None)
+            post_dicts.append(d)
+        IG_RESULT['posts'] = post_dicts
+
+        # 키워드 추출 (해시태그 기반)
+        import re as _re
+        kw_counter = {}
+        for p in posts:
+            tags = _re.findall(r'#(\w+)', p.caption or '')
+            for t in tags:
+                t_lower = t.lower()
+                if t_lower != hashtag.lower():
+                    kw_counter[t_lower] = kw_counter.get(t_lower, 0) + 1
+        top_kw = sorted(kw_counter.items(), key=lambda x: x[1], reverse=True)[:30]
+        IG_RESULT['keywords'] = [{'tag': k, 'count': v} for k, v in top_kw]
+        log(f"🏷️ 키워드 {len(top_kw)}개 추출")
+
+        # 계정 분석
+        acc_counter = {}
+        for p in posts:
+            if p.account:
+                acc_counter[p.account] = acc_counter.get(p.account, 0) + 1
+        top_acc = sorted(acc_counter.items(), key=lambda x: x[1], reverse=True)[:20]
+        IG_RESULT['accounts'] = [{'account': a, 'posts': c} for a, c in top_acc]
+
+        # 통계
+        total_likes    = sum(p.likes or 0 for p in posts)
+        total_comments = sum(p.comments or 0 for p in posts)
+        IG_RESULT['summary'] = {
+            'total_posts': len(posts),
+            'avg_likes':    round(total_likes / max(len(posts), 1), 1),
+            'avg_comments': round(total_comments / max(len(posts), 1), 1),
+            'video_ratio':  round(sum(1 for p in posts if p.is_video) / max(len(posts), 1) * 100, 1),
+        }
+        log(f"📊 평균 좋아요 {IG_RESULT['summary']['avg_likes']}, 평균 댓글 {IG_RESULT['summary']['avg_comments']}")
+
+    except ImportError as e:
+        log(f"⚠ 모듈 없음: {e} → pip install playwright loguru pandas pillow 실행 필요")
+    except Exception as e:
+        log(f"❌ 오류: {e}")
+        import traceback
+        for line in traceback.format_exc().splitlines()[-5:]:
+            log(f"   {line}")
+    finally:
+        IG_RUNNING = False
+
+
+# ─── YouTube 백그라운드 검색 ──────────────────────────────────────
+def run_youtube_bg(keyword: str, max_results: int, get_comments: bool):
+    global YT_LOG, YT_RUNNING, YT_RESULT
+    YT_LOG = []
+    YT_RUNNING = True
+    YT_RESULT = {'videos': []}
+    log = lambda msg: YT_LOG.append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+
+    log(f"🎬 '{keyword}' YouTube 검색 시작 (최대 {max_results}개)")
+
+    try:
+        import sys, os
+        base = os.path.dirname(os.path.abspath(__file__))
+        if base not in sys.path:
+            sys.path.insert(0, base)
+
+        from agents.youtube_agent import YouTubeAgent
+        agent = YouTubeAgent()
+
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        videos = loop.run_until_complete(agent.search_videos(keyword, max_results=max_results))
+        log(f"✅ 영상 {len(videos)}개 수집")
+
+        # 댓글 수집 (요청 시)
+        if get_comments and videos:
+            log(f"💬 상위 5개 영상 댓글 수집 중...")
+            for v in videos[:5]:
+                try:
+                    comments = loop.run_until_complete(
+                        agent.get_video_comments(v.video_url, max_comments=10)
+                    )
+                    v.top_comments = comments
+                    log(f"  댓글 {len(comments)}개 [{v.title[:30]}]")
+                except Exception as ce:
+                    log(f"  댓글 오류: {ce}")
+        loop.close()
+
+        # 직렬화
+        YT_RESULT['videos'] = [v.to_dict() for v in videos]
+
+        # 통계
+        total_views = sum(v.views or 0 for v in videos)
+        YT_RESULT['summary'] = {
+            'total': len(videos),
+            'total_views': total_views,
+            'avg_views': round(total_views / max(len(videos), 1)),
+        }
+        log(f"📊 총 조회수 {total_views:,}, 평균 {YT_RESULT['summary']['avg_views']:,}")
+
+    except ImportError as e:
+        log(f"⚠ 모듈 없음: {e}")
+    except Exception as e:
+        log(f"❌ 오류: {e}")
+        import traceback
+        for line in traceback.format_exc().splitlines()[-5:]:
+            log(f"   {line}")
+    finally:
+        YT_RUNNING = False
+
+
 def scheduler():
     while True:
         if datetime.now().hour==0 and datetime.now().minute==0:
@@ -794,7 +1088,7 @@ if __name__ == '__main__':
     PORT = 5000
     server = HTTPServer(('0.0.0.0', PORT), Handler)
     print("="*50)
-    print("🛍️  패션 리서치 툴 v2")
+    print("🛍️  패션 리서치 툴 v4 (통합)")
     print(f"📌 http://localhost:{PORT}")
     print("="*50)
     try: server.serve_forever()

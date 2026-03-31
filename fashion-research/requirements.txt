@@ -1,21 +1,25 @@
-# 기본
+# ─── 기본 (순수 Python 서버 + 크롤링) ───
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 lxml>=5.1.0
 
-# 비동기 HTTP (벌크 스캔 속도 개선)
+# ─── 비동기 HTTP (벌크 스캔 속도 개선) ───
 httpx>=0.27.0
 aiohttp>=3.9.0
 
-# 데이터 처리
+# ─── 데이터 처리 (시장 반응 속도 분석) ───
 pandas>=2.2.0
 numpy>=1.26.0
 
-# Playwright (JavaScript 렌더링 폴백)
+# ─── Playwright (Instagram/YouTube/JS 렌더링 스크래퍼) ───
 playwright>=1.44.0
 
-# 유틸리티
+# ─── 유틸리티 ───
 loguru>=0.7.0
 python-dotenv>=1.0.0
 tqdm>=4.66.0
 fake-useragent>=1.5.0
+
+# ─── 선택 (AI 리뷰 분석 / 차트) ───
+# openai>=1.0.0        # AI 분석 기능 사용 시
+# plotly>=5.0.0        # 고급 차트 분석 시 (판매 분석용)

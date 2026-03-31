@@ -49,6 +49,8 @@ input,select,textarea{font-family:inherit}
 
 /* ── Page toggle ── */
 .page{display:none}.page.on{display:block}
+/* Instagram 서브탭 (nav() 함수에 영향받지 않도록 별도 클래스) */
+.ig-page{display:none}.ig-page.on{display:block}
 
 /* ── Data notice ── */
 .data-notice{background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r);padding:10px 14px;font-size:.8rem;color:#92400e;margin-bottom:18px;display:flex;align-items:center;gap:8px}
@@ -199,6 +201,8 @@ tr:hover td{background:var(--bg)}
     <div class="ni on" onclick="nav('ranking',this)"><span class="ic">📊</span>랭킹 대시보드</div>
     <div class="ni" onclick="nav('bulk',this)"><span class="ic">🗂️</span>카테고리 벌크 스캔</div>
     <div class="ni" onclick="nav('market',this)"><span class="ic">⚡</span>시장 반응 속도</div>
+    <div class="ni" onclick="nav('instagram',this)"><span class="ic">📸</span>Instagram 분석</div>
+    <div class="ni" onclick="nav('youtube',this)"><span class="ic">🎬</span>YouTube 트렌드</div>
     <div class="nav-sec">소재</div>
     <div class="ni" onclick="nav('fabric',this)"><span class="ic">🧵</span>원단 분석</div>
     <div class="nav-sec">관리</div>
@@ -334,18 +338,211 @@ tr:hover td{background:var(--bg)}
       </div>
     </div>
 
+    <!-- ── INSTAGRAM PAGE ── -->
+    <div class="page" id="page-instagram">
+      <div style="font-size:1.05rem;font-weight:700;margin-bottom:4px">📸 Instagram 분석</div>
+      <div style="font-size:.8rem;color:var(--sub);margin-bottom:18px">해시태그 검색 → 포스트 수집 → 키워드/계정 분석. 설정에서 계정 정보를 먼저 입력하세요.</div>
+
+      <!-- 검색 폼 -->
+      <div class="tw" style="padding:18px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:end">
+          <div>
+            <label style="display:block;font-size:.75rem;color:var(--sub);margin-bottom:4px">해시태그 (# 없이 입력)</label>
+            <input type="text" class="fi" id="igHashtag" placeholder="예: 데님팬츠 / 와이드데님 / musinsa">
+          </div>
+          <div>
+            <label style="display:block;font-size:.75rem;color:var(--sub);margin-bottom:4px">수집 개수</label>
+            <select class="fs" id="igMaxPosts" style="width:80px">
+              <option value="10">10개</option>
+              <option value="20" selected>20개</option>
+              <option value="30">30개</option>
+            </select>
+          </div>
+          <button class="btn btn-p" id="igBtn" onclick="startInstagram()" style="white-space:nowrap">🔍 분석 시작</button>
+        </div>
+      </div>
+
+      <!-- 진행 상태 -->
+      <div class="tw" style="padding:14px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:.82rem;font-weight:600">진행 상황</div>
+          <span id="igBadge" style="font-size:.72rem;padding:3px 8px;border-radius:20px;background:#f3f4f6;color:var(--sub)">● 대기</span>
+        </div>
+        <div style="background:#111;color:#f9a8d4;border-radius:8px;padding:12px;font-family:'Courier New',monospace;font-size:.72rem;height:140px;overflow-y:auto;white-space:pre-wrap;line-height:1.6" id="igLog">> 분석 시작 버튼을 누르세요...</div>
+      </div>
+
+      <!-- 요약 카드 (결과 후 표시) -->
+      <div id="igSummaryCards" style="display:none;margin-bottom:14px">
+        <div class="stats" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat"><div class="stat-label">수집 포스트</div><div class="stat-val" id="igTotalP">—</div></div>
+          <div class="stat"><div class="stat-label">평균 좋아요</div><div class="stat-val" id="igAvgLikes">—</div></div>
+          <div class="stat"><div class="stat-label">평균 댓글</div><div class="stat-val" id="igAvgComments">—</div></div>
+          <div class="stat"><div class="stat-label">영상 비율</div><div class="stat-val" id="igVideoRatio">—</div><div class="stat-sub">%</div></div>
+        </div>
+      </div>
+
+      <!-- 결과 탭 -->
+      <div id="igResultWrap" style="display:none">
+        <div class="tabs" style="margin-bottom:14px">
+          <div class="tab ig-tab on" onclick="switchIgTab('posts',this)">포스트 목록</div>
+          <div class="tab ig-tab" onclick="switchIgTab('keywords',this)">키워드 분석</div>
+          <div class="tab ig-tab" onclick="switchIgTab('accounts',this)">계정 분석</div>
+        </div>
+
+        <!-- 포스트 목록 -->
+        <div id="igTabPosts" class="ig-page on">
+          <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+            <button class="btn btn-o btn-sm" onclick="exportIgCsv()">📥 CSV 다운로드</button>
+          </div>
+          <div class="tw">
+            <table>
+              <thead><tr><th>계정</th><th>캡션</th><th>좋아요</th><th>댓글</th><th>업로드</th><th>유형</th><th>링크</th></tr></thead>
+              <tbody id="igPostTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 키워드 분석 -->
+        <div id="igTabKeywords" class="ig-page">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="tw" style="padding:16px">
+              <div style="font-size:.82rem;font-weight:600;margin-bottom:10px">🏷️ 연관 해시태그 TOP 30</div>
+              <div style="height:220px;position:relative"><canvas id="igKwChart"></canvas></div>
+            </div>
+            <div class="tw" style="padding:16px">
+              <div style="font-size:.82rem;font-weight:600;margin-bottom:10px">📋 키워드 목록</div>
+              <div id="igKwList" style="max-height:220px;overflow-y:auto;font-size:.8rem"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 계정 분석 -->
+        <div id="igTabAccounts" class="ig-page">
+          <div class="tw" style="padding:16px">
+            <div style="font-size:.82rem;font-weight:600;margin-bottom:10px">👤 활성 계정 TOP 20</div>
+            <div id="igAccList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── YOUTUBE PAGE ── -->
+    <div class="page" id="page-youtube">
+      <div style="font-size:1.05rem;font-weight:700;margin-bottom:4px">🎬 YouTube 트렌드</div>
+      <div style="font-size:.8rem;color:var(--sub);margin-bottom:18px">키워드로 YouTube를 검색해 영상 목록·조회수·댓글을 분석합니다.</div>
+
+      <!-- 검색 폼 -->
+      <div class="tw" style="padding:18px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:10px;align-items:end">
+          <div>
+            <label style="display:block;font-size:.75rem;color:var(--sub);margin-bottom:4px">검색 키워드</label>
+            <input type="text" class="fi" id="ytKeyword" placeholder="예: 데님팬츠 코디 / 와이드진 OOTD">
+          </div>
+          <div>
+            <label style="display:block;font-size:.75rem;color:var(--sub);margin-bottom:4px">최대 개수</label>
+            <select class="fs" id="ytMaxResults" style="width:80px">
+              <option value="10">10개</option>
+              <option value="15" selected>15개</option>
+              <option value="20">20개</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;padding-top:16px">
+            <input type="checkbox" id="ytGetComments">
+            <label for="ytGetComments" style="font-size:.8rem;white-space:nowrap">댓글 수집</label>
+          </div>
+          <button class="btn btn-p" id="ytBtn" onclick="startYoutube()" style="white-space:nowrap">🔍 검색</button>
+        </div>
+      </div>
+
+      <!-- 진행 상태 -->
+      <div class="tw" style="padding:14px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:.82rem;font-weight:600">진행 상황</div>
+          <span id="ytBadge" style="font-size:.72rem;padding:3px 8px;border-radius:20px;background:#f3f4f6;color:var(--sub)">● 대기</span>
+        </div>
+        <div style="background:#111;color:#86efac;border-radius:8px;padding:12px;font-family:'Courier New',monospace;font-size:.72rem;height:120px;overflow-y:auto;white-space:pre-wrap;line-height:1.6" id="ytLog">> 검색 버튼을 누르세요...</div>
+      </div>
+
+      <!-- 요약 카드 -->
+      <div id="ytSummaryCards" style="display:none;margin-bottom:14px">
+        <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+          <div class="stat"><div class="stat-label">수집 영상</div><div class="stat-val" id="ytTotal">—</div></div>
+          <div class="stat"><div class="stat-label">총 조회수</div><div class="stat-val" id="ytTotalViews">—</div></div>
+          <div class="stat"><div class="stat-label">평균 조회수</div><div class="stat-val" id="ytAvgViews">—</div></div>
+        </div>
+      </div>
+
+      <!-- 결과 -->
+      <div id="ytResultWrap" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:.88rem;font-weight:600">검색 결과</div>
+          <button class="btn btn-o btn-sm" onclick="exportYtCsv()">📥 CSV 다운로드</button>
+        </div>
+        <!-- 조회수 차트 -->
+        <div class="tw" style="padding:16px;margin-bottom:14px">
+          <div style="font-size:.82rem;font-weight:600;margin-bottom:10px">📊 영상별 조회수</div>
+          <div style="height:180px;position:relative"><canvas id="ytViewChart"></canvas></div>
+        </div>
+        <!-- 영상 목록 -->
+        <div class="tw">
+          <table>
+            <thead><tr><th>순위</th><th>영상 제목</th><th>채널</th><th>조회수</th><th>업로드</th><th>길이</th><th>댓글 미리보기</th></tr></thead>
+            <tbody id="ytTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ── SETTINGS PAGE ── -->
     <div class="page" id="page-settings">
       <div style="font-size:1.05rem;font-weight:700;margin-bottom:16px">⚙️ 설정</div>
-      <div class="tw" style="padding:20px;margin-bottom:14px">
-        <div style="font-size:.92rem;font-weight:600;margin-bottom:4px">네이버 검색 API</div>
+
+      <!-- 네이버 API -->
+      <div class="tw" style="padding:20px;margin-bottom:12px">
+        <div style="font-size:.92rem;font-weight:600;margin-bottom:4px">📰 네이버 검색 API</div>
         <div style="font-size:.8rem;color:var(--sub);margin-bottom:14px">블로그 리뷰 수 자동 조회. <a href="https://developers.naver.com/apps/" target="_blank" style="color:var(--text);text-decoration:underline">네이버 개발자센터</a>에서 무료 발급</div>
         <div class="fg"><label class="fl">Client ID</label><input type="text" class="fi" id="nId" placeholder="Client ID"></div>
         <div class="fg"><label class="fl">Client Secret</label><input type="password" class="fi" id="nSec" placeholder="Client Secret"></div>
         <button class="btn btn-p" onclick="saveNaver()">저장</button>
       </div>
+
+      <!-- Instagram 계정 -->
+      <div class="tw" style="padding:20px;margin-bottom:12px">
+        <div style="font-size:.92rem;font-weight:600;margin-bottom:4px">📸 Instagram 계정</div>
+        <div style="font-size:.8rem;color:var(--sub);margin-bottom:14px">해시태그 수집 및 포스트 분석에 사용됩니다. 로그인 쿠키는 data/instagram_cookies.json에 저장됩니다.</div>
+        <div class="fr">
+          <div class="fg"><label class="fl">아이디</label><input type="text" class="fi" id="igUser" placeholder="Instagram 아이디"></div>
+          <div class="fg"><label class="fl">비밀번호</label><input type="password" class="fi" id="igPw" placeholder="Instagram 비밀번호"></div>
+        </div>
+        <button class="btn btn-p" onclick="saveInstagram()">저장</button>
+      </div>
+
+      <!-- OpenAI -->
+      <div class="tw" style="padding:20px;margin-bottom:12px">
+        <div style="font-size:.92rem;font-weight:600;margin-bottom:4px">🤖 OpenAI API</div>
+        <div style="font-size:.8rem;color:var(--sub);margin-bottom:14px">AI 리뷰 요약 및 상품 브리핑에 사용됩니다.</div>
+        <div class="fg"><label class="fl">API Key</label><input type="password" class="fi" id="oaiKey" placeholder="sk-..."></div>
+        <button class="btn btn-p" onclick="saveOpenAI()">저장</button>
+      </div>
+
+      <!-- 크롤링 옵션 -->
+      <div class="tw" style="padding:20px;margin-bottom:12px">
+        <div style="font-size:.92rem;font-weight:600;margin-bottom:4px">🕷️ 크롤링 옵션</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+          <div class="fg"><label class="fl">딜레이 최소 (초)</label><input type="number" class="fi" id="delMin" value="1.5" step="0.5" min="0"></div>
+          <div class="fg"><label class="fl">딜레이 최대 (초)</label><input type="number" class="fi" id="delMax" value="3.5" step="0.5" min="0"></div>
+          <div class="fg"><label class="fl">최대 페이지</label><input type="number" class="fi" id="maxPg" value="999" min="1"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <input type="checkbox" id="headlessCheck" checked>
+          <label for="headlessCheck" style="font-size:.84rem">Headless 모드 (브라우저 창 숨김 - 권장)</label>
+        </div>
+        <button class="btn btn-p" onclick="saveCrawlOptions()">저장</button>
+      </div>
+
+      <!-- 랭킹 가중치 -->
       <div class="tw" style="padding:20px">
-        <div style="font-size:.92rem;font-weight:600;margin-bottom:4px">랭킹 점수 가중치</div>
+        <div style="font-size:.92rem;font-weight:600;margin-bottom:4px">⚖️ 랭킹 점수 가중치</div>
         <div style="font-size:.8rem;color:var(--sub);margin-bottom:14px">합계가 1.0이어야 합니다.</div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px">
           <div class="fg"><label class="fl">29cm 순위</label><input type="number" class="fi" id="w1" value="0.30" step="0.05" min="0" max="1"></div>
@@ -418,7 +615,10 @@ tr:hover td{background:var(--bg)}
       <div id="bulkResultWrap" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="font-size:.88rem;font-weight:600">스캔 결과</div>
-          <button class="btn btn-o btn-sm" onclick="exportBulkCsv()">📥 CSV 다운로드</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-p btn-sm" onclick="saveBulkToProducts()" id="bulkSaveBtn">➕ 랭킹에 추가</button>
+            <button class="btn btn-o btn-sm" onclick="exportBulkCsv()">📥 CSV 다운로드</button>
+          </div>
         </div>
         <div class="tw">
           <table>
@@ -868,7 +1068,7 @@ function renderProductsTable() {
 }
 
 // ─── NAV ──────────────────────────────────────────────────────────
-const TITLES={ranking:'📊 랭킹 대시보드',bulk:'🗂️ 카테고리 벌크 스캔',market:'⚡ 시장 반응 속도',fabric:'🧵 원단 분석',brands:'🏷️ 브랜드 관리',products:'👗 제품 관리',update:'🔄 업데이트 센터',settings:'⚙️ 설정'};
+const TITLES={ranking:'📊 랭킹 대시보드',bulk:'🗂️ 카테고리 벌크 스캔',market:'⚡ 시장 반응 속도',instagram:'📸 Instagram 분석',youtube:'🎬 YouTube 트렌드',fabric:'🧵 원단 분석',brands:'🏷️ 브랜드 관리',products:'👗 제품 관리',update:'🔄 업데이트 센터',settings:'⚙️ 설정'};
 function nav(id, el) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
@@ -1092,19 +1292,6 @@ async function crawlOne(pid, btn) {
   }
   btn.innerHTML = orig;
   btn.disabled = false;
-}
-
-// ─── SETTINGS ─────────────────────────────────────────────────────
-async function saveNaver() {
-  const d=await api('/api/settings','POST',{naver_client_id:gv('nId'),naver_client_secret:gv('nSec')});
-  toast(d.success?'✅ 저장됨':'❌ 실패',d.success?'ok':'err');
-}
-async function saveWeights() {
-  const w={score_29cm:parseFloat(gv('w1')),score_wconcept:parseFloat(gv('w2')),score_naver:parseFloat(gv('w3')),score_instagram:parseFloat(gv('w4'))};
-  const total=Object.values(w).reduce((a,b)=>a+b,0);
-  if(Math.abs(total-1)>0.01){toast(`❌ 합계 ${total.toFixed(2)} (1.00 필요)`,'err');return;}
-  const d=await api('/api/settings','POST',{score_weights:w});
-  toast(d.success?'✅ 가중치 저장':'❌ 실패',d.success?'ok':'err');
 }
 
 // ─── REFRESH ──────────────────────────────────────────────────────
@@ -1370,6 +1557,338 @@ function renderMarketResponse() {
     </tr>`;
   }).join('');
   tbody.innerHTML = rows;
+}
+
+// ─── BULK SAVE TO PRODUCTS ────────────────────────────────────────
+async function saveBulkToProducts() {
+  if (!_bulkResultData || !_bulkResultData.meta || !_bulkResultData.meta.length) {
+    toast('저장할 데이터가 없습니다','err'); return;
+  }
+  const btn = gid('bulkSaveBtn');
+  if (btn) { btn.disabled=true; btn.innerHTML='<span class="spin"></span>저장 중...'; }
+  const d = await api('/api/bulk/save','POST',{ items: _bulkResultData.meta });
+  if (d.success) {
+    toast(`✅ ${d.added}개 제품이 랭킹에 추가됐습니다`,'ok');
+    await refresh();
+  } else {
+    toast('❌ '+(d.error||'저장 실패'),'err');
+  }
+  if (btn) { btn.disabled=false; btn.innerHTML='➕ 랭킹에 추가'; }
+}
+
+// ─── INSTAGRAM ────────────────────────────────────────────────────
+let _igPollTimer = null;
+let _igLastLogLen = 0;
+let _igResultData = null;
+let _igKwChart = null;
+let _igCurTab = 'posts';
+
+async function startInstagram() {
+  const btn = gid('igBtn');
+  if (btn && btn.disabled) return;
+  const hashtag = gv('igHashtag');
+  if (!hashtag) { toast('해시태그를 입력하세요','err'); return; }
+  const maxPosts = parseInt(gv('igMaxPosts')) || 20;
+
+  const logEl = gid('igLog');
+  const badge = gid('igBadge');
+  if (btn)   { btn.disabled=true; btn.innerHTML='<span class="spin"></span>분석 중...'; }
+  if (badge) { badge.textContent='● 실행 중'; badge.style.background='#fce7f3'; badge.style.color='#be185d'; }
+  if (logEl) logEl.textContent = '';
+  gid('igSummaryCards').style.display='none';
+  gid('igResultWrap').style.display='none';
+  _igLastLogLen = 0;
+
+  const d = await api('/api/instagram/start','POST',{ hashtag, max_posts: maxPosts });
+  if (!d.success) { toast('❌ '+(d.message||d.error),'err'); _resetIgUI(); return; }
+  toast(`🔍 #${hashtag} 분석 시작`,'ok');
+
+  clearInterval(_igPollTimer);
+  _igPollTimer = setInterval(async () => {
+    const res = await api('/api/instagram/log');
+    if (!res) return;
+    const logs = res.logs || [];
+    if (logs.length > _igLastLogLen && logEl) {
+      logEl.textContent += (logEl.textContent?'\n':'') + logs.slice(_igLastLogLen).join('\n');
+      logEl.scrollTop = logEl.scrollHeight;
+      _igLastLogLen = logs.length;
+    }
+    if (!res.running) {
+      clearInterval(_igPollTimer);
+      if (badge) { badge.textContent='✅ 완료'; badge.style.background='#d1fae5'; badge.style.color='#16a34a'; }
+      _igResultData = res.result || {};
+      _renderIgResult(_igResultData);
+      toast('✅ Instagram 분석 완료!','ok');
+      setTimeout(_resetIgUI, 3000);
+    }
+  }, 2000);
+}
+
+function _resetIgUI() {
+  const btn = gid('igBtn');
+  const badge = gid('igBadge');
+  if (btn)   { btn.disabled=false; btn.innerHTML='🔍 분석 시작'; }
+  if (badge && badge.textContent==='● 실행 중') {
+    badge.textContent='● 대기'; badge.style.background='#f3f4f6'; badge.style.color='var(--sub)';
+  }
+}
+
+function _renderIgResult(result) {
+  const posts    = result.posts    || [];
+  const keywords = result.keywords || [];
+  const accounts = result.accounts || [];
+  const summary  = result.summary  || {};
+
+  if (!posts.length && !keywords.length) return;
+
+  // 요약 카드
+  gid('igSummaryCards').style.display='block';
+  gid('igTotalP').textContent      = summary.total_posts || posts.length;
+  gid('igAvgLikes').textContent    = summary.avg_likes != null ? summary.avg_likes : '—';
+  gid('igAvgComments').textContent = summary.avg_comments != null ? summary.avg_comments : '—';
+  gid('igVideoRatio').textContent  = summary.video_ratio != null ? summary.video_ratio+'%' : '—';
+
+  // 포스트 테이블
+  const tbody = gid('igPostTbody');
+  if (tbody) {
+    if (!posts.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--sub)">수집된 포스트가 없습니다</td></tr>';
+    } else {
+      tbody.innerHTML = posts.map(p => `<tr>
+        <td style="font-size:.78rem;font-weight:600">${esc(p.account||'—')}</td>
+        <td style="max-width:200px;font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.caption||'')}">${esc((p.caption||'').slice(0,60))}${p.caption&&p.caption.length>60?'…':''}</td>
+        <td style="text-align:right">${num(p.likes||0)}</td>
+        <td style="text-align:right">${num(p.comments||0)}</td>
+        <td style="font-size:.72rem;color:var(--sub)">${esc((p.posted_at||'').slice(0,10))}</td>
+        <td><span class="bdg" style="background:${p.is_video?'#ede9fe':'#f0f9ff'};color:${p.is_video?'#5b21b6':'#0369a1'}">${p.is_video?'🎬영상':'🖼️사진'}</span></td>
+        <td><a href="${esc(p.post_url||'')}" target="_blank" style="font-size:.72rem;color:var(--text);text-decoration:underline">열기</a></td>
+      </tr>`).join('');
+    }
+  }
+
+  // 키워드 차트
+  const canvas = gid('igKwChart');
+  if (canvas && keywords.length) {
+    if (_igKwChart) _igKwChart.destroy();
+    const top15 = keywords.slice(0,15);
+    _igKwChart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: top15.map(k=>'#'+k.tag),
+        datasets:[{ label:'언급 수', data:top15.map(k=>k.count), backgroundColor:'#f9a8d4', borderRadius:4 }]
+      },
+      options: {
+        indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false} },
+        scales:{ x:{beginAtZero:true,ticks:{font:{size:10}}}, y:{ticks:{font:{size:10}}} }
+      }
+    });
+  }
+
+  // 키워드 목록
+  const kwList = gid('igKwList');
+  if (kwList) {
+    kwList.innerHTML = keywords.map((k,i)=>
+      `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--text)">#${esc(k.tag)}</span>
+        <span style="color:var(--sub);font-weight:600">${k.count}회</span>
+      </div>`
+    ).join('') || '<div style="color:var(--sub);font-size:.8rem">추출된 키워드가 없습니다</div>';
+  }
+
+  // 계정 분석
+  const accList = gid('igAccList');
+  if (accList) {
+    accList.innerHTML = accounts.map(a=>
+      `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:.84rem;font-weight:500">@${esc(a.account)}</div>
+        <div>
+          <span style="font-size:.72rem;background:#f0f9ff;color:#0369a1;padding:2px 7px;border-radius:10px;font-weight:600">${a.posts}개 포스트</span>
+        </div>
+      </div>`
+    ).join('') || '<div style="padding:20px;text-align:center;color:var(--sub)">계정 데이터 없음</div>';
+  }
+
+  gid('igResultWrap').style.display='block';
+  // igResultWrap 안의 .ig-tab 중 첫 번째 탭으로 초기화
+  const igResultWrap = gid('igResultWrap');
+  const firstTab = igResultWrap ? igResultWrap.querySelector('.ig-tab') : null;
+  switchIgTab('posts', firstTab);
+}
+
+function switchIgTab(tab, el) {
+  _igCurTab = tab;
+  ['posts','keywords','accounts'].forEach(t => {
+    const el2 = gid('igTab'+t.charAt(0).toUpperCase()+t.slice(1));
+    if (el2) el2.classList.toggle('on', t===tab);
+  });
+  document.querySelectorAll('.ig-tab').forEach(e=>e.classList.remove('on'));
+  if (el) el.classList.add('on');
+}
+
+function exportIgCsv() {
+  if (!_igResultData || !_igResultData.posts || !_igResultData.posts.length) {
+    toast('다운로드할 데이터가 없습니다','err'); return;
+  }
+  const cols = ['account','caption','likes','comments','posted_at','is_video','post_url'];
+  const header = cols.join(',');
+  const rows = _igResultData.posts.map(r=>cols.map(k=>JSON.stringify(r[k]!=null?r[k]:'')).join(','));
+  const csv = '\uFEFF'+header+'\n'+rows.join('\n');
+  const a = document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`instagram_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+}
+
+// ─── YOUTUBE ──────────────────────────────────────────────────────
+let _ytPollTimer = null;
+let _ytLastLogLen = 0;
+let _ytResultData = null;
+let _ytViewChart = null;
+
+async function startYoutube() {
+  const btn = gid('ytBtn');
+  if (btn && btn.disabled) return;
+  const keyword = gv('ytKeyword');
+  if (!keyword) { toast('검색어를 입력하세요','err'); return; }
+  const maxResults = parseInt(gv('ytMaxResults')) || 15;
+  const getComments = gid('ytGetComments')?.checked || false;
+
+  const logEl = gid('ytLog');
+  const badge = gid('ytBadge');
+  if (btn)   { btn.disabled=true; btn.innerHTML='<span class="spin"></span>검색 중...'; }
+  if (badge) { badge.textContent='● 실행 중'; badge.style.background='#dcfce7'; badge.style.color='#15803d'; }
+  if (logEl) logEl.textContent = '';
+  gid('ytSummaryCards').style.display='none';
+  gid('ytResultWrap').style.display='none';
+  _ytLastLogLen = 0;
+
+  const d = await api('/api/youtube/start','POST',{ keyword, max_results: maxResults, get_comments: getComments });
+  if (!d.success) { toast('❌ '+(d.message||d.error),'err'); _resetYtUI(); return; }
+  toast(`🎬 "${keyword}" 검색 시작`,'ok');
+
+  clearInterval(_ytPollTimer);
+  _ytPollTimer = setInterval(async () => {
+    const res = await api('/api/youtube/log');
+    if (!res) return;
+    const logs = res.logs || [];
+    if (logs.length > _ytLastLogLen && logEl) {
+      logEl.textContent += (logEl.textContent?'\n':'') + logs.slice(_ytLastLogLen).join('\n');
+      logEl.scrollTop = logEl.scrollHeight;
+      _ytLastLogLen = logs.length;
+    }
+    if (!res.running) {
+      clearInterval(_ytPollTimer);
+      if (badge) { badge.textContent='✅ 완료'; badge.style.background='#d1fae5'; badge.style.color='#16a34a'; }
+      _ytResultData = res.result || {};
+      _renderYtResult(_ytResultData);
+      toast('✅ YouTube 검색 완료!','ok');
+      setTimeout(_resetYtUI, 3000);
+    }
+  }, 2000);
+}
+
+function _resetYtUI() {
+  const btn = gid('ytBtn');
+  const badge = gid('ytBadge');
+  if (btn)   { btn.disabled=false; btn.innerHTML='🔍 검색'; }
+  if (badge && badge.textContent==='● 실행 중') {
+    badge.textContent='● 대기'; badge.style.background='#f3f4f6'; badge.style.color='var(--sub)';
+  }
+}
+
+function _renderYtResult(result) {
+  const videos  = result.videos  || [];
+  const summary = result.summary || {};
+  if (!videos.length) return;
+
+  // 요약 카드
+  gid('ytSummaryCards').style.display='block';
+  gid('ytTotal').textContent      = summary.total || videos.length;
+  gid('ytTotalViews').textContent = num(summary.total_views || 0);
+  gid('ytAvgViews').textContent   = num(summary.avg_views  || 0);
+
+  // 조회수 차트
+  const canvas = gid('ytViewChart');
+  if (canvas) {
+    if (_ytViewChart) _ytViewChart.destroy();
+    _ytViewChart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: videos.map((_,i)=>`#${i+1}`),
+        datasets:[{
+          label:'조회수', data: videos.map(v=>v.views||0),
+          backgroundColor:'rgba(74,222,128,.7)', borderColor:'#16a34a', borderWidth:1, borderRadius:4
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false} },
+        scales:{ y:{beginAtZero:true,ticks:{font:{size:10}}}, x:{ticks:{font:{size:10}}} }
+      }
+    });
+  }
+
+  // 영상 목록 테이블
+  const tbody = gid('ytTbody');
+  if (tbody) {
+    tbody.innerHTML = videos.map((v,i)=>{
+      const comments = (v.top_comments||'').split('\n---\n').filter(Boolean);
+      const cmtPreview = comments.length ? comments[0].slice(0,60)+'…' : '—';
+      return `<tr>
+        <td style="font-size:.9rem;font-weight:700;color:var(--sub)">${i+1}</td>
+        <td style="max-width:220px"><a href="${esc(v.video_url||'')}" target="_blank" style="font-size:.82rem;font-weight:500;color:var(--text)">${esc(v.title||'—')}</a></td>
+        <td style="font-size:.76rem;color:var(--sub)">${esc(v.channel||'—')}</td>
+        <td style="font-weight:600;text-align:right">${num(v.views||0)}</td>
+        <td style="font-size:.72rem;color:var(--sub)">${esc(v.upload_date||'—')}</td>
+        <td style="font-size:.72rem;color:var(--sub)">${esc(v.duration||'—')}</td>
+        <td style="font-size:.72rem;color:var(--sub);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(cmtPreview)}">${esc(cmtPreview)}</td>
+      </tr>`;
+    }).join('');
+  }
+  gid('ytResultWrap').style.display='block';
+}
+
+function exportYtCsv() {
+  if (!_ytResultData || !_ytResultData.videos || !_ytResultData.videos.length) {
+    toast('다운로드할 데이터가 없습니다','err'); return;
+  }
+  const cols = ['rank','title','channel','views','upload_date','duration','video_url','top_comments'];
+  const header = cols.join(',');
+  const rows = _ytResultData.videos.map((r,i)=>
+    cols.map(k=>JSON.stringify(k==='rank'?i+1:(r[k]!=null?r[k]:''))).join(',')
+  );
+  const csv = '\uFEFF'+header+'\n'+rows.join('\n');
+  const a = document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`youtube_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+}
+
+// ─── SETTINGS SAVE ────────────────────────────────────────────────
+async function saveNaver() {
+  const d=await api('/api/settings','POST',{naver_client_id:gv('nId'),naver_client_secret:gv('nSec')});
+  toast(d.success?'✅ 네이버 API 저장':'❌ 실패',d.success?'ok':'err');
+}
+async function saveInstagram() {
+  const d=await api('/api/settings','POST',{instagram_username:gv('igUser'),instagram_password:gv('igPw')});
+  toast(d.success?'✅ Instagram 계정 저장':'❌ 실패',d.success?'ok':'err');
+}
+async function saveOpenAI() {
+  const d=await api('/api/settings','POST',{openai_api_key:gv('oaiKey')});
+  toast(d.success?'✅ OpenAI 키 저장':'❌ 실패',d.success?'ok':'err');
+}
+async function saveCrawlOptions() {
+  const d=await api('/api/settings','POST',{
+    scrape_delay_min: parseFloat(gv('delMin'))||1.5,
+    scrape_delay_max: parseFloat(gv('delMax'))||3.5,
+    max_pages: parseInt(gv('maxPg'))||999,
+    headless_mode: gid('headlessCheck')?.checked !== false
+  });
+  toast(d.success?'✅ 크롤링 옵션 저장':'❌ 실패',d.success?'ok':'err');
+}
+async function saveWeights() {
+  const w={score_29cm:parseFloat(gv('w1')),score_wconcept:parseFloat(gv('w2')),score_naver:parseFloat(gv('w3')),score_instagram:parseFloat(gv('w4'))};
+  const total=Object.values(w).reduce((a,b)=>a+b,0);
+  if(Math.abs(total-1)>0.01){toast(`❌ 합계 ${total.toFixed(2)} (1.00 필요)`,'err');return;}
+  const d=await api('/api/settings','POST',{score_weights:w});
+  toast(d.success?'✅ 가중치 저장':'❌ 실패',d.success?'ok':'err');
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────
