@@ -483,6 +483,7 @@ class Handler(BaseHTTPRequestHandler):
                 if p['id'] == pid:
                     for k in ['name','brand_name','category','season','price',
                               'url_29cm','url_wconcept','image_url','fabric',
+                              'mfg_date',
                               'score_29cm','score_wconcept','score_naver','score_instagram']:
                         if k in data: p[k] = data[k]
                     p['updated_date'] = date.today().isoformat()
