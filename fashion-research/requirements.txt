@@ -1,3 +1,21 @@
+# 기본
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 lxml>=5.1.0
+
+# 비동기 HTTP (벌크 스캔 속도 개선)
+httpx>=0.27.0
+aiohttp>=3.9.0
+
+# 데이터 처리
+pandas>=2.2.0
+numpy>=1.26.0
+
+# Playwright (JavaScript 렌더링 폴백)
+playwright>=1.44.0
+
+# 유틸리티
+loguru>=0.7.0
+python-dotenv>=1.0.0
+tqdm>=4.66.0
+fake-useragent>=1.5.0

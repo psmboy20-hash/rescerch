@@ -1,12 +1,12 @@
 @echo off
 chcp 65001 > nul
-title 패션 리서치 툴 v2
+title 패션 리서치 툴 v3 (통합)
 
 echo.
-echo  ╔══════════════════════════════════════╗
-echo  ║   패션 리서치 툴 v2                  ║
-echo  ║   브랜드 랭킹 + 소재 + 크롤링       ║
-echo  ╚══════════════════════════════════════╝
+echo  ╔══════════════════════════════════════════════╗
+echo  ║   패션 리서치 툴 v3 (통합 버전)             ║
+echo  ║   랭킹 + 벌크스캔 + 시장반응속도 + 원단    ║
+echo  ╚══════════════════════════════════════════════╝
 echo.
 
 :: 현재 파일 위치로 이동
@@ -23,7 +23,7 @@ if errorlevel 1 (
 
 :: 패키지 설치
 echo [1/3] 패키지 설치 확인 중...
-py -3.11 -m pip install requests beautifulsoup4 playwright -q
+py -3.11 -m pip install requests beautifulsoup4 playwright httpx loguru pandas tqdm aiohttp python-dotenv fake-useragent -q
 
 :: Playwright 브라우저
 echo [2/3] Playwright 브라우저 확인 중...

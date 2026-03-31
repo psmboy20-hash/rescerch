@@ -1,12 +1,25 @@
 """
-패션 리서치 툴 v2 - 상세 페이지 + 리뷰 추이 + 원단 분석
+패션 리서치 툴 v3 - 통합 버전
+- fashion-research UI (랭킹, 원단, 브랜드, 제품, 업데이트)
+- arête 벌크 스캔 (카테고리 URL → 제품 일괄 분석)
+- 시장 반응 속도 (제조년월 vs 첫 리뷰 차이)
 순수 Python 내장 라이브러리 (Flask 불필요)
 """
 
-import json, os, uuid, re, threading, time
+import json, os, uuid, re, threading, time, sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, date
 from urllib.parse import urlparse, parse_qs
+
+# ─── Windows 비동기 이벤트 루프 설정 ───────────────────────────────
+import asyncio
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+# ─── 벌크 스캔 전역 상태 ──────────────────────────────────────────
+BULK_LOG = []
+BULK_RUNNING = False
+BULK_RESULT = {'meta': [], 'reviews': []}  # 최신 스캔 결과
 
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR    = os.path.join(BASE_DIR, 'data')
@@ -97,13 +110,16 @@ def render_page():
             'total_score': round(p.get('total_score',0),1)
         })
 
+    market_response = _get_market_response_data()
+
     data_json = json.dumps({
         'rankings': rankings,
         'brands': brands,
         'settings': settings,
         'products_all': products,
         'fabric_map': fabric_map,
-        'last_updated': settings.get('last_updated','없음 (예시 데이터)')
+        'last_updated': settings.get('last_updated','없음 (예시 데이터)'),
+        'market_response': market_response['items'],
     }, ensure_ascii=False)
 
     with open(TEMPLATE_FILE, 'r', encoding='utf-8') as f:
@@ -169,6 +185,18 @@ class Handler(BaseHTTPRequestHandler):
         # 업데이트 로그 폴링
         elif path == '/api/update/log':
             self.send_json({'logs': UPDATE_LOG, 'running': UPDATE_RUNNING})
+
+        # ── 벌크 스캔 상태 폴링 ──
+        elif path == '/api/bulk/log':
+            self.send_json({
+                'logs': BULK_LOG,
+                'running': BULK_RUNNING,
+                'result': BULK_RESULT
+            })
+
+        # ── 시장 반응 속도 조회 ──
+        elif path == '/api/market-response':
+            self.send_json(_get_market_response_data())
 
         else:
             self.send_response(404); self.end_headers()
@@ -311,6 +339,26 @@ class Handler(BaseHTTPRequestHandler):
             if 'score_weights' in data: s['score_weights'] = data['score_weights']
             save_json(SETTINGS_FILE, s)
             self.send_json({'success':True})
+
+        # ── 벌크 스캔 시작 ──
+        elif path == '/api/bulk/start':
+            global BULK_RUNNING
+            if BULK_RUNNING:
+                self.send_json({'success': False, 'message': '이미 스캔 중입니다'})
+            else:
+                category_url = data.get('category_url', '').strip()
+                platform     = data.get('platform', '29cm').strip()
+                limit        = int(data.get('limit', 20))
+                if not category_url:
+                    self.send_json({'success': False, 'error': 'category_url이 필요합니다'})
+                    return
+                t = threading.Thread(
+                    target=run_bulk_scan_bg,
+                    args=(category_url, platform, limit),
+                    daemon=True
+                )
+                t.start()
+                self.send_json({'success': True, 'message': f'벌크 스캔 시작 ({platform}, 최대 {limit}개)'})
 
         else:
             self.send_response(404); self.end_headers()
@@ -584,6 +632,148 @@ def run_single_product_update(pid):
     save_json(PRODUCTS_FILE, products)
     log(f"✅ [{pid}] 크롤링 완료")
     UPDATE_RUNNING = False
+
+# ─── 시장 반응 속도 데이터 계산 ──────────────────────────────────
+def _get_market_response_data():
+    """제조년월 vs 첫 리뷰 날짜 → 시장 반응 속도(일) 계산"""
+    products = load_json(PRODUCTS_FILE)
+    result = []
+    for p in products:
+        mfg = p.get('mfg_date', '')
+        history = p.get('review_history', [])
+        if not history:
+            continue
+        # 첫 리뷰 날짜 = review_history 중 가장 이른 날짜 (cnt_29cm 또는 cnt_wconcept > 0)
+        first_review_month = None
+        for h in sorted(history, key=lambda x: x.get('date','')):
+            if h.get('cnt_29cm', 0) > 0 or h.get('cnt_wconcept', 0) > 0 or h.get('naver', 0) > 0:
+                first_review_month = h.get('date', '')
+                break
+        if not first_review_month:
+            first_review_month = history[0].get('date', '') if history else ''
+
+        response_days = None
+        if mfg and first_review_month:
+            try:
+                from datetime import datetime as dt
+                mfg_clean = mfg.replace('.', '-').replace('/', '-')
+                mfg_dt = dt.strptime(mfg_clean[:7], '%Y-%m')
+                rev_dt = dt.strptime(first_review_month[:7], '%Y-%m')
+                response_days = max(0, (rev_dt - mfg_dt).days)
+            except Exception:
+                pass
+
+        result.append({
+            'id': p.get('id', ''),
+            'name': p.get('name', ''),
+            'brand_name': p.get('brand_name', ''),
+            'category': p.get('category', ''),
+            'mfg_date': mfg,
+            'first_review_month': first_review_month,
+            'response_days': response_days,
+            'total_score': round(p.get('total_score', 0), 1),
+            'score_29cm': p.get('score_29cm', 0),
+            'score_wconcept': p.get('score_wconcept', 0),
+            'score_naver': p.get('score_naver', 0),
+            'score_instagram': p.get('score_instagram', 0),
+            'review_history': p.get('review_history', []),
+            'image_url': p.get('image_url', ''),
+            'url_29cm': p.get('url_29cm', ''),
+            'url_wconcept': p.get('url_wconcept', ''),
+        })
+    # 응답속도 기준 정렬 (빠른 것 먼저)
+    result.sort(key=lambda x: (x['response_days'] is None, x['response_days'] or 9999))
+    return {'items': result}
+
+
+# ─── 벌크 스캔 백그라운드 실행 ───────────────────────────────────
+def run_bulk_scan_bg(category_url: str, platform: str, limit: int):
+    """백그라운드에서 벌크 스캔 실행 → BULK_LOG / BULK_RESULT 업데이트"""
+    global BULK_LOG, BULK_RUNNING, BULK_RESULT
+    BULK_LOG = []
+    BULK_RUNNING = True
+    BULK_RESULT = {'meta': [], 'reviews': [], 'summary': {}}
+    log = lambda msg: BULK_LOG.append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+
+    log(f"🔍 [{platform}] 카테고리 스캔 시작: {category_url[:60]}...")
+    log(f"📋 최대 {limit}개 제품 수집 예정")
+
+    try:
+        # scrapers 경로 추가
+        import sys, os
+        base = os.path.dirname(os.path.abspath(__file__))
+        if base not in sys.path:
+            sys.path.insert(0, base)
+
+        from scrapers.bulk_scanner import run_bulk_scan
+        meta_df, reviews_df = run_bulk_scan(
+            category_url=category_url,
+            platform=platform,
+            limit=limit,
+            progress_callback=log
+        )
+
+        if meta_df is not None and not meta_df.empty:
+            meta_records = meta_df.to_dict(orient='records')
+            # datetime 직렬화
+            for r in meta_records:
+                for k, v in r.items():
+                    if hasattr(v, 'isoformat'):
+                        r[k] = v.isoformat()
+                    elif v != v:  # NaN check
+                        r[k] = None
+            BULK_RESULT['meta'] = meta_records
+
+            # 시장 반응 속도 계산
+            resp_items = []
+            for r in meta_records:
+                mfg = r.get('manufacture_date') or ''
+                first_rev = r.get('first_review_date') or ''
+                response_days = r.get('market_response_days')
+                resp_items.append({
+                    'name': r.get('name',''),
+                    'brand': r.get('brand',''),
+                    'platform': r.get('platform',''),
+                    'mfg_date': mfg,
+                    'first_review_date': first_rev,
+                    'response_days': response_days,
+                    'review_count': r.get('review_count', 0),
+                    'avg_rating': r.get('avg_rating', 0),
+                    'url': r.get('url', ''),
+                })
+            BULK_RESULT['market_response'] = resp_items
+
+            # 요약 통계
+            total = len(meta_records)
+            avg_reviews = sum(r.get('review_count', 0) or 0 for r in meta_records) / max(total, 1)
+            avg_rating  = sum(r.get('avg_rating', 0) or 0 for r in meta_records) / max(total, 1)
+            resp_vals = [r['response_days'] for r in resp_items if r['response_days'] is not None]
+            avg_resp = sum(resp_vals) / len(resp_vals) if resp_vals else None
+            BULK_RESULT['summary'] = {
+                'total': total,
+                'avg_reviews': round(avg_reviews, 1),
+                'avg_rating': round(avg_rating, 2),
+                'avg_response_days': round(avg_resp, 1) if avg_resp is not None else None,
+            }
+            log(f"✅ 완료: {total}개 제품, 평균 리뷰 {avg_reviews:.0f}건, 평균 반응속도 {avg_resp:.0f}일" if avg_resp else f"✅ 완료: {total}개 제품")
+        else:
+            log("⚠ 수집된 제품이 없습니다. URL 또는 플랫폼을 확인해주세요.")
+
+        if reviews_df is not None and not reviews_df.empty:
+            BULK_RESULT['reviews_count'] = len(reviews_df)
+            log(f"📝 총 리뷰 {len(reviews_df)}건 수집")
+
+    except ImportError as e:
+        log(f"⚠ 스크래퍼 모듈 임포트 실패: {e}")
+        log("pip install httpx playwright loguru pandas 실행 후 재시도하세요")
+    except Exception as e:
+        log(f"❌ 오류: {e}")
+        import traceback
+        for line in traceback.format_exc().splitlines()[-5:]:
+            log(f"   {line}")
+    finally:
+        BULK_RUNNING = False
+
 
 def scheduler():
     while True:

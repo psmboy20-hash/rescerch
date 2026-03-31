@@ -197,6 +197,8 @@ tr:hover td{background:var(--bg)}
   <nav class="nav">
     <div class="nav-sec">분석</div>
     <div class="ni on" onclick="nav('ranking',this)"><span class="ic">📊</span>랭킹 대시보드</div>
+    <div class="ni" onclick="nav('bulk',this)"><span class="ic">🗂️</span>카테고리 벌크 스캔</div>
+    <div class="ni" onclick="nav('market',this)"><span class="ic">⚡</span>시장 반응 속도</div>
     <div class="nav-sec">소재</div>
     <div class="ni" onclick="nav('fabric',this)"><span class="ic">🧵</span>원단 분석</div>
     <div class="nav-sec">관리</div>
@@ -355,6 +357,125 @@ tr:hover td{background:var(--bg)}
       </div>
     </div>
 
+    <!-- ── BULK SCAN PAGE ── -->
+    <div class="page" id="page-bulk">
+      <div style="font-size:1.05rem;font-weight:700;margin-bottom:4px">🗂️ 카테고리 벌크 스캔</div>
+      <div style="font-size:.8rem;color:var(--sub);margin-bottom:18px">카테고리 URL을 입력하면 상위 제품들의 리뷰·평점·시장 반응 데이터를 일괄 수집합니다.</div>
+
+      <!-- 입력 폼 -->
+      <div class="tw" style="padding:20px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:end">
+          <div>
+            <label style="display:block;font-size:.75rem;color:var(--sub);margin-bottom:4px">카테고리 URL</label>
+            <input type="text" class="fi" id="bulkUrl" placeholder="https://www.29cm.co.kr/category/... 또는 https://www.wconcept.co.kr/Category/...">
+          </div>
+          <div>
+            <label style="display:block;font-size:.75rem;color:var(--sub);margin-bottom:4px">플랫폼</label>
+            <select class="fs" id="bulkPlatform" style="width:110px">
+              <option value="29cm">29cm</option>
+              <option value="wconcept">W컨셉</option>
+              <option value="musinsa">무신사</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-size:.75rem;color:var(--sub);margin-bottom:4px">최대 개수</label>
+            <select class="fs" id="bulkLimit" style="width:80px">
+              <option value="10">10개</option>
+              <option value="20" selected>20개</option>
+              <option value="30">30개</option>
+              <option value="50">50개</option>
+            </select>
+          </div>
+          <button class="btn btn-p" id="bulkBtn" onclick="startBulkScan()" style="white-space:nowrap">🚀 스캔 시작</button>
+        </div>
+      </div>
+
+      <!-- 진행 상태 -->
+      <div class="tw" style="padding:16px;margin-bottom:14px" id="bulkProgressWrap">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:.84rem;font-weight:600">진행 상황</div>
+          <span id="bulkBadge" style="font-size:.72rem;padding:3px 8px;border-radius:20px;background:#f3f4f6;color:var(--sub)">● 대기</span>
+        </div>
+        <div style="background:#111;color:#a3e635;border-radius:8px;padding:12px;font-family:'Courier New',monospace;font-size:.72rem;height:180px;overflow-y:auto;white-space:pre-wrap;line-height:1.6" id="bulkLog">> 스캔 시작 버튼을 누르세요...</div>
+        <div id="bulkProgWrap" style="display:none;margin-top:8px">
+          <div style="height:4px;background:#e5e7eb;border-radius:4px;overflow:hidden">
+            <div id="bulkProgBar" style="height:100%;background:linear-gradient(90deg,#3b82f6,#22c55e);width:0%;transition:width .3s;border-radius:4px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 결과 요약 카드 -->
+      <div id="bulkSummaryCards" style="display:none;margin-bottom:14px">
+        <div class="stats" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat"><div class="stat-label">수집 제품 수</div><div class="stat-val" id="bsTotalP">—</div></div>
+          <div class="stat"><div class="stat-label">평균 리뷰 수</div><div class="stat-val" id="bsAvgRev">—</div></div>
+          <div class="stat"><div class="stat-label">평균 평점</div><div class="stat-val" id="bsAvgRating">—</div></div>
+          <div class="stat"><div class="stat-label">평균 반응속도</div><div class="stat-val" id="bsAvgResp">—</div><div class="stat-sub">제조→첫리뷰(일)</div></div>
+        </div>
+      </div>
+
+      <!-- 결과 테이블 -->
+      <div id="bulkResultWrap" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:.88rem;font-weight:600">스캔 결과</div>
+          <button class="btn btn-o btn-sm" onclick="exportBulkCsv()">📥 CSV 다운로드</button>
+        </div>
+        <div class="tw">
+          <table>
+            <thead>
+              <tr>
+                <th>제품명</th><th>브랜드</th><th>플랫폼</th>
+                <th>리뷰 수</th><th>평점</th>
+                <th>제조년월</th><th>첫 리뷰</th><th>반응속도(일)</th>
+              </tr>
+            </thead>
+            <tbody id="bulkTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── MARKET RESPONSE PAGE ── -->
+    <div class="page" id="page-market">
+      <div style="font-size:1.05rem;font-weight:700;margin-bottom:4px">⚡ 시장 반응 속도</div>
+      <div style="font-size:.8rem;color:var(--sub);margin-bottom:18px">제조년월 → 첫 리뷰 등록까지의 일수. 짧을수록 시장 반응이 빠릅니다.</div>
+
+      <!-- 요약 카드 -->
+      <div class="stats" style="margin-bottom:20px">
+        <div class="stat"><div class="stat-label">추적 중인 제품</div><div class="stat-val" id="mrTotal">—</div></div>
+        <div class="stat"><div class="stat-label">평균 반응 속도</div><div class="stat-val" id="mrAvg">—</div><div class="stat-sub">일</div></div>
+        <div class="stat"><div class="stat-label">가장 빠른 반응</div><div class="stat-val" id="mrFastest">—</div><div class="stat-sub">일</div></div>
+        <div class="stat"><div class="stat-label">데이터 있는 제품</div><div class="stat-val" id="mrWithData">—</div></div>
+      </div>
+
+      <!-- 차트 영역 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+        <div class="tw" style="padding:16px">
+          <div style="font-size:.82rem;font-weight:600;margin-bottom:10px">📊 반응속도 분포</div>
+          <div style="height:200px;position:relative"><canvas id="mrBarChart"></canvas></div>
+        </div>
+        <div class="tw" style="padding:16px">
+          <div style="font-size:.82rem;font-weight:600;margin-bottom:10px">📈 월별 리뷰 데이터 흐름</div>
+          <div style="height:200px;position:relative"><canvas id="mrLineChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- 상세 테이블 -->
+      <div class="tw">
+        <table>
+          <thead>
+            <tr>
+              <th>제품</th><th>카테고리</th>
+              <th>제조년월</th><th>첫 리뷰</th><th>반응속도</th>
+              <th>29cm</th><th>W컨셉</th><th>블로그</th><th>인스타</th>
+              <th>종합점수</th>
+            </tr>
+          </thead>
+          <tbody id="mrTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -455,6 +576,7 @@ function renderAll() {
   renderBrands();
   renderProductsTable();
   renderFabric();
+  renderMarketResponse();
 }
 
 // ─── STATS ────────────────────────────────────────────────────────
@@ -746,7 +868,7 @@ function renderProductsTable() {
 }
 
 // ─── NAV ──────────────────────────────────────────────────────────
-const TITLES={ranking:'📊 랭킹 대시보드',fabric:'🧵 원단 분석',brands:'🏷️ 브랜드 관리',products:'👗 제품 관리',update:'🔄 업데이트 센터',settings:'⚙️ 설정'};
+const TITLES={ranking:'📊 랭킹 대시보드',bulk:'🗂️ 카테고리 벌크 스캔',market:'⚡ 시장 반응 속도',fabric:'🧵 원단 분석',brands:'🏷️ 브랜드 관리',products:'👗 제품 관리',update:'🔄 업데이트 센터',settings:'⚙️ 설정'};
 function nav(id, el) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
@@ -996,6 +1118,258 @@ async function refresh() {
       if(D.last_updated){ gid('sfDate').textContent=D.last_updated; if(gid('lastUpdPanel')) gid('lastUpdPanel').textContent=D.last_updated; }
     } else location.reload();
   } catch {location.reload();}
+}
+
+// ─── BULK SCAN ────────────────────────────────────────────────────
+let _bulkPollTimer = null;
+let _bulkLastLogLen = 0;
+let _bulkResultData = null;
+
+async function startBulkScan() {
+  const btn = gid('bulkBtn');
+  if (btn && btn.disabled) return;
+  const url = gv('bulkUrl');
+  if (!url) { toast('카테고리 URL을 입력해 주세요','err'); return; }
+
+  const platform = gv('bulkPlatform');
+  const limit    = parseInt(gv('bulkLimit')) || 20;
+  const logEl    = gid('bulkLog');
+  const badge    = gid('bulkBadge');
+  const progWrap = gid('bulkProgWrap');
+  const progBar  = gid('bulkProgBar');
+
+  if (btn) { btn.disabled=true; btn.innerHTML='<span class="spin"></span>스캔 중...'; }
+  if (badge)    { badge.textContent='● 실행 중'; badge.style.background='#dbeafe'; badge.style.color='#1d4ed8'; }
+  if (logEl)    { logEl.textContent=''; }
+  if (progWrap) progWrap.style.display='block';
+  if (progBar)  progBar.style.width='5%';
+  gid('bulkSummaryCards').style.display='none';
+  gid('bulkResultWrap').style.display='none';
+  _bulkLastLogLen = 0;
+
+  const d = await api('/api/bulk/start','POST',{ category_url:url, platform, limit });
+  if (!d.success) {
+    toast('❌ '+(d.message||d.error),'err');
+    _resetBulkUI();
+    return;
+  }
+  toast(`🚀 스캔 시작 (${platform}, ${limit}개)`,'ok');
+
+  clearInterval(_bulkPollTimer);
+  _bulkPollTimer = setInterval(async () => {
+    const res = await api('/api/bulk/log');
+    if (!res) return;
+
+    // 로그 추가
+    const logs = res.logs || [];
+    if (logs.length > _bulkLastLogLen && logEl) {
+      const newLines = logs.slice(_bulkLastLogLen).join('\n');
+      logEl.textContent += (logEl.textContent?'\n':'') + newLines;
+      logEl.scrollTop = logEl.scrollHeight;
+      _bulkLastLogLen = logs.length;
+    }
+    // 진행 바
+    if (progBar && res.running) {
+      const cur = parseFloat(progBar.style.width)||5;
+      if (cur < 85) progBar.style.width = Math.min(cur+2, 85)+'%';
+    }
+    // 완료
+    if (!res.running) {
+      clearInterval(_bulkPollTimer);
+      if (progBar) progBar.style.width='100%';
+      if (badge)   { badge.textContent='✅ 완료'; badge.style.background='#d1fae5'; badge.style.color='#16a34a'; }
+      _bulkResultData = res.result || {};
+      _renderBulkResult(_bulkResultData);
+      toast('✅ 스캔 완료!','ok');
+      setTimeout(_resetBulkUI, 3000);
+    }
+  }, 2000);
+}
+
+function _resetBulkUI() {
+  const btn = gid('bulkBtn');
+  const badge = gid('bulkBadge');
+  if (btn)   { btn.disabled=false; btn.innerHTML='🚀 스캔 시작'; }
+  if (badge && badge.textContent==='● 실행 중') {
+    badge.textContent='● 대기'; badge.style.background='#f3f4f6'; badge.style.color='var(--sub)';
+  }
+}
+
+function _renderBulkResult(result) {
+  const meta = result.meta || [];
+  const summary = result.summary || {};
+
+  // 요약 카드
+  if (meta.length > 0) {
+    gid('bulkSummaryCards').style.display='block';
+    gid('bsTotalP').textContent    = summary.total || meta.length;
+    gid('bsAvgRev').textContent    = summary.avg_reviews != null ? summary.avg_reviews.toFixed(0) : '—';
+    gid('bsAvgRating').textContent = summary.avg_rating   != null ? summary.avg_rating.toFixed(1) : '—';
+    gid('bsAvgResp').textContent   = summary.avg_response_days != null ? summary.avg_response_days+'일' : '—';
+  }
+
+  // 결과 테이블
+  const tbody = gid('bulkTbody');
+  if (!tbody) return;
+  if (!meta.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--sub)">수집된 제품이 없습니다</td></tr>';
+    gid('bulkResultWrap').style.display='block';
+    return;
+  }
+
+  const rows = meta.map(p => {
+    const resp = p.market_response_days != null ? p.market_response_days+'일'
+               : (p.response_days != null ? p.response_days+'일' : '—');
+    const respColor = !p.market_response_days && !p.response_days ? 'var(--sub)'
+                    : (p.market_response_days||p.response_days) < 30 ? 'var(--up)'
+                    : (p.market_response_days||p.response_days) < 90 ? 'var(--buzz)' : 'var(--down)';
+    const link = p.url || p.url_29cm || '';
+    const nameEl = link ? `<a href="${esc(link)}" target="_blank" style="color:var(--text)">${esc(p.name||'—')}</a>` : esc(p.name||'—');
+    return `<tr>
+      <td style="max-width:200px"><div style="font-size:.84rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nameEl}</div></td>
+      <td style="font-size:.78rem">${esc(p.brand||'—')}</td>
+      <td><span class="bdg ${p.platform==='29cm'?'b29':'bw'}">${esc(p.platform||'—')}</span></td>
+      <td style="text-align:right">${num(p.review_count||0)}</td>
+      <td style="text-align:right">${p.avg_rating ? Number(p.avg_rating).toFixed(1) : '—'}</td>
+      <td style="font-size:.78rem;color:var(--sub)">${esc(p.manufacture_date||'—')}</td>
+      <td style="font-size:.78rem;color:var(--sub)">${esc(p.first_review_date||'—')}</td>
+      <td style="font-weight:600;color:${respColor}">${resp}</td>
+    </tr>`;
+  }).join('');
+  tbody.innerHTML = rows;
+  gid('bulkResultWrap').style.display='block';
+}
+
+function exportBulkCsv() {
+  if (!_bulkResultData || !_bulkResultData.meta || !_bulkResultData.meta.length) {
+    toast('다운로드할 데이터가 없습니다','err'); return;
+  }
+  const cols = ['name','brand','platform','review_count','avg_rating','manufacture_date','first_review_date','market_response_days','url'];
+  const header = cols.join(',');
+  const rows = _bulkResultData.meta.map(r =>
+    cols.map(k => JSON.stringify(r[k]!=null?r[k]:'')).join(',')
+  );
+  const csv = '\uFEFF' + header + '\n' + rows.join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download = `bulk_scan_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ─── MARKET RESPONSE ──────────────────────────────────────────────
+let mrBarChart = null;
+let mrLineChart = null;
+
+function renderMarketResponse() {
+  const items = D.market_response || [];
+
+  // 요약 카드
+  const withData = items.filter(i => i.response_days != null);
+  gid('mrTotal').textContent    = items.length;
+  gid('mrWithData').textContent = withData.length;
+  if (withData.length) {
+    const days = withData.map(i=>i.response_days);
+    gid('mrAvg').textContent     = Math.round(days.reduce((a,b)=>a+b,0)/days.length) + '일';
+    gid('mrFastest').textContent = Math.min(...days) + '일';
+  } else {
+    gid('mrAvg').textContent = gid('mrFastest').textContent = '—';
+  }
+
+  // 반응속도 분포 바차트
+  const canvas1 = document.getElementById('mrBarChart');
+  if (canvas1) {
+    if (mrBarChart) mrBarChart.destroy();
+    const buckets = {'0-30일':0,'30-60일':0,'60-90일':0,'90일+':0,'미집계':0};
+    items.forEach(i => {
+      if (i.response_days == null) { buckets['미집계']++; return; }
+      if (i.response_days < 30)       buckets['0-30일']++;
+      else if (i.response_days < 60)  buckets['30-60일']++;
+      else if (i.response_days < 90)  buckets['60-90일']++;
+      else                            buckets['90일+']++;
+    });
+    mrBarChart = new Chart(canvas1, {
+      type: 'bar',
+      data: {
+        labels: Object.keys(buckets),
+        datasets: [{
+          label: '제품 수',
+          data: Object.values(buckets),
+          backgroundColor: ['#22c55e','#f59e0b','#f97316','#ef4444','#9ca3af'],
+          borderRadius: 5, borderSkipped: false
+        }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false} },
+        scales:{ y:{beginAtZero:true,grid:{color:'rgba(0,0,0,.05)'},ticks:{font:{size:10}}},
+                 x:{grid:{display:false},ticks:{font:{size:10}}} }
+      }
+    });
+  }
+
+  // 월별 데이터 흐름 라인차트 (전체 제품 합계)
+  const canvas2 = document.getElementById('mrLineChart');
+  if (canvas2) {
+    if (mrLineChart) mrLineChart.destroy();
+    // 모든 제품의 review_history를 월별로 집계
+    const monthMap = {};
+    items.forEach(i => {
+      (i.review_history||[]).forEach(h => {
+        if (!monthMap[h.date]) monthMap[h.date] = {naver:0, instagram:0, cnt_29cm:0, cnt_wconcept:0};
+        monthMap[h.date].naver       += h.naver||0;
+        monthMap[h.date].instagram   += h.instagram||0;
+        monthMap[h.date].cnt_29cm    += h.cnt_29cm||0;
+        monthMap[h.date].cnt_wconcept+= h.cnt_wconcept||0;
+      });
+    });
+    const sortedMonths = Object.keys(monthMap).sort();
+    mrLineChart = new Chart(canvas2, {
+      type: 'line',
+      data: {
+        labels: sortedMonths,
+        datasets: [
+          { label:'29cm', data: sortedMonths.map(m=>monthMap[m].cnt_29cm), borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,.1)', tension:.4, fill:true, pointRadius:3 },
+          { label:'W컨셉', data: sortedMonths.map(m=>monthMap[m].cnt_wconcept), borderColor:'#8b5cf6', backgroundColor:'rgba(139,92,246,.08)', tension:.4, fill:true, pointRadius:3 },
+          { label:'블로그', data: sortedMonths.map(m=>monthMap[m].naver), borderColor:'#22c55e', backgroundColor:'rgba(34,197,94,.08)', tension:.4, fill:true, pointRadius:3 },
+          { label:'인스타', data: sortedMonths.map(m=>monthMap[m].instagram), borderColor:'#f97316', backgroundColor:'rgba(249,115,22,.08)', tension:.4, fill:true, pointRadius:3 },
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ position:'top', labels:{font:{size:10},usePointStyle:true} } },
+        scales:{ y:{beginAtZero:true,grid:{color:'rgba(0,0,0,.05)'},ticks:{font:{size:10}}},
+                 x:{grid:{display:false},ticks:{font:{size:10},maxTicksLimit:6}} }
+      }
+    });
+  }
+
+  // 상세 테이블
+  const tbody = gid('mrTbody');
+  if (!tbody) return;
+  const catName = {denim:'데님팬츠',shirt:'셔츠·블라우스',tshirt:'반팔티·나시티',all:'전체'};
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--sub)">제품을 추가하고 업데이트를 실행하면 데이터가 표시됩니다.</td></tr>';
+    return;
+  }
+  const rows = items.map(p => {
+    const resp = p.response_days != null ? p.response_days+'일' : '—';
+    const respColor = p.response_days == null ? 'var(--sub)'
+                    : p.response_days < 30  ? 'var(--up)'
+                    : p.response_days < 90  ? 'var(--buzz)' : 'var(--down)';
+    return `<tr style="cursor:pointer" onclick="openDetail('${p.id}')">
+      <td><div style="font-size:.84rem;font-weight:500">${esc(p.brand_name)}</div><div style="font-size:.78rem;color:var(--sub)">${esc(p.name)}</div></td>
+      <td style="font-size:.76rem">${catName[p.category]||p.category||'—'}</td>
+      <td style="font-size:.76rem;color:var(--sub)">${esc(p.mfg_date||'—')}</td>
+      <td style="font-size:.76rem;color:var(--sub)">${esc(p.first_review_month||'—')}</td>
+      <td style="font-weight:700;color:${respColor}">${resp}</td>
+      <td>${p.score_29cm||0}</td>
+      <td>${p.score_wconcept||0}</td>
+      <td>${num(p.score_naver||0)}</td>
+      <td>${num(p.score_instagram||0)}</td>
+      <td><div class="sbw" style="min-width:80px"><div class="sb"><div class="sbf" style="width:${Math.min(p.total_score||0,100).toFixed(0)}%"></div></div><span class="sv">${(p.total_score||0).toFixed(1)}</span></div></td>
+    </tr>`;
+  }).join('');
+  tbody.innerHTML = rows;
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────
