@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>패션 리서치 툴 v2</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f5f3;--surface:#fff;--border:#e8e8e5;
+  --text:#1a1a1a;--sub:#8a8a8a;--accent:#1a1a1a;
+  --up:#22c55e;--down:#ef4444;--buzz:#f59e0b;--new:#3b82f6;
+  --denim:#4f6ef7;--shirt:#10b981;--tshirt:#f97316;
+  --r:8px;--sw:218px;
+}
+html{font-size:14px}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Segoe UI',sans-serif;display:flex;min-height:100vh}
+a{text-decoration:none;color:inherit}
+button{cursor:pointer;border:none;outline:none;background:none;font-family:inherit}
+input,select,textarea{font-family:inherit}
+
+/* ── Sidebar ── */
+.sidebar{width:var(--sw);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0;z-index:100;overflow-y:auto}
+.logo{padding:18px 18px 14px;border-bottom:1px solid var(--border)}
+.logo-main{font-size:1rem;font-weight:700}
+.logo-sub{font-size:.7rem;color:var(--sub);margin-top:2px}
+.nav{padding:10px 0;flex:1}
+.nav-sec{padding:8px 18px 3px;font-size:.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--sub)}
+.ni{display:flex;align-items:center;gap:8px;padding:8px 18px;cursor:pointer;font-size:.88rem;color:var(--sub);transition:.15s;border-right:2px solid transparent}
+.ni:hover{background:var(--bg);color:var(--text)}
+.ni.on{color:var(--text);font-weight:600;background:var(--bg);border-right-color:var(--accent)}
+.ni .ic{width:16px;text-align:center;font-size:.8rem}
+.sf{padding:14px 18px;border-top:1px solid var(--border);font-size:.72rem;color:var(--sub)}
+.sf .warn{color:var(--buzz);font-size:.68rem;margin-top:4px}
+
+/* ── Main ── */
+.main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{height:56px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:.95rem;font-weight:600}
+.topbar-actions{display:flex;gap:8px}
+.btn{padding:6px 14px;border-radius:var(--r);font-size:.82rem;font-weight:500;transition:.15s;cursor:pointer}
+.btn-p{background:var(--accent);color:#fff}.btn-p:hover{opacity:.85}
+.btn-o{background:transparent;border:1px solid var(--border);color:var(--text)}.btn-o:hover{background:var(--bg)}
+.btn-sm{padding:4px 10px;font-size:.76rem}
+.btn-d{background:#fee2e2;color:#dc2626;border:1px solid #fecaca}.btn-d:hover{background:#fecaca}
+.btn-buzz{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+.content{padding:24px;flex:1}
+
+/* ── Page toggle ── */
+.page{display:none}.page.on{display:block}
+
+/* ── Data notice ── */
+.data-notice{background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r);padding:10px 14px;font-size:.8rem;color:#92400e;margin-bottom:18px;display:flex;align-items:center;gap:8px}
+
+/* ── Stats ── */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px}
+.stat-label{font-size:.72rem;color:var(--sub);margin-bottom:4px}
+.stat-val{font-size:1.5rem;font-weight:700}
+.stat-sub{font-size:.68rem;color:var(--sub);margin-top:3px}
+
+/* ── Tabs ── */
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:18px}
+.tab{padding:9px 18px;font-size:.84rem;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent;transition:.15s;white-space:nowrap}
+.tab:hover{color:var(--text)}.tab.on{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.cnt{display:inline-block;background:#f0f0ee;color:var(--sub);font-size:.68rem;padding:1px 5px;border-radius:8px;margin-left:4px}
+
+/* ── Table ── */
+.tw{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th{padding:9px 14px;text-align:left;font-size:.72rem;color:var(--sub);font-weight:500;border-bottom:1px solid var(--border);background:var(--bg);white-space:nowrap}
+td{padding:9px 14px;font-size:.84rem;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg)}
+.rn{font-size:.9rem;font-weight:700;color:var(--sub);min-width:24px;display:inline-block;text-align:center}
+.rn.g{color:#f59e0b}.rn.s{color:#94a3b8}.rn.b{color:#b45309}
+.rc{font-size:.68rem;font-weight:600;margin-left:2px}
+.rc.up{color:var(--up)}.rc.dn{color:var(--down)}.rc.nw{color:var(--new)}.rc.sm{color:var(--sub)}
+.thumb{width:38px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);flex-shrink:0}
+.thumb-ph{width:38px;height:48px;border-radius:4px;background:#f0f0ee;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+.pc{display:flex;align-items:center;gap:10px}
+.pi{display:flex;flex-direction:column;gap:2px}
+.pb{font-size:.7rem;color:var(--sub)}
+.pn{font-size:.86rem;font-weight:500}
+.pn a{color:var(--text)}.pn a:hover{text-decoration:underline}
+.price{font-weight:600;white-space:nowrap}
+.sbw{display:flex;align-items:center;gap:6px;min-width:90px}
+.sb{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.sbf{height:100%;background:var(--accent);border-radius:2px}
+.sv{font-size:.75rem;color:var(--sub);min-width:30px;text-align:right}
+.bdg{font-size:.62rem;padding:2px 5px;border-radius:4px;font-weight:600;margin-right:2px;white-space:nowrap}
+.b29{background:#fef3c7;color:#92400e}
+.bw{background:#ede9fe;color:#5b21b6}
+.buzz-badge{background:#fef3c7;color:#92400e;border:1px solid #fde68a;font-size:.65rem;padding:2px 6px;border-radius:10px;font-weight:700}
+.tag{font-size:.66rem;padding:2px 6px;border-radius:10px;background:#f0f0ee;color:var(--sub);margin-right:3px;display:inline-block;margin-bottom:2px}
+
+/* ── Detail Panel ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300}
+.overlay.on{display:block}
+.detail-panel{position:fixed;top:0;right:-700px;width:680px;max-width:95vw;height:100vh;background:var(--surface);box-shadow:-4px 0 40px rgba(0,0,0,.15);z-index:301;display:flex;flex-direction:column;transition:right .3s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.detail-panel.on{right:0}
+.dp-header{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--border);flex-shrink:0}
+.dp-close{font-size:1.3rem;color:var(--sub);cursor:pointer;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:.15s}
+.dp-close:hover{background:var(--bg)}
+.dp-body{flex:1;overflow-y:auto;padding:0}
+.dp-hero{display:flex;gap:20px;padding:22px}
+.dp-img{width:180px;min-width:180px;height:230px;border-radius:10px;object-fit:cover;background:#f0f0ee;border:1px solid var(--border)}
+.dp-img-ph{width:180px;min-width:180px;height:230px;border-radius:10px;background:#f0f0ee;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:3rem}
+.dp-info{flex:1;display:flex;flex-direction:column;gap:8px}
+.dp-brand{font-size:.78rem;color:var(--sub)}
+.dp-name{font-size:1.15rem;font-weight:700;line-height:1.3}
+.dp-price{font-size:1.1rem;font-weight:700;margin-top:2px}
+.dp-season{display:inline-block;background:#f0f0ee;color:var(--sub);font-size:.72rem;padding:3px 8px;border-radius:12px;font-weight:600}
+.dp-links{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.dp-link-btn{display:flex;align-items:center;gap:5px;padding:7px 14px;border-radius:var(--r);font-size:.8rem;font-weight:600;cursor:pointer;transition:.15s;text-decoration:none}
+.dp-link-29{background:#fef3c7;color:#92400e;border:1px solid #fde68a}.dp-link-29:hover{background:#fde68a}
+.dp-link-w{background:#ede9fe;color:#5b21b6;border:1px solid #ddd6fe}.dp-link-w:hover{background:#ddd6fe}
+.dp-section{padding:0 22px 20px;border-top:1px solid var(--border);padding-top:18px}
+.dp-section+.dp-section{border-top:1px solid var(--border)}
+.dp-sec-title{font-size:.8rem;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
+.fabric-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fabric-item{background:var(--bg);border-radius:var(--r);padding:10px 14px}
+.fabric-key{font-size:.7rem;color:var(--sub);margin-bottom:3px}
+.fabric-val{font-size:.88rem;font-weight:600}
+.chart-wrap{height:180px;position:relative}
+.chart-wrap-bar{height:160px;position:relative}
+.notice-small{font-size:.72rem;color:var(--sub);text-align:right;margin-top:6px}
+
+/* ── Review Input Form ── */
+.review-form{background:var(--bg);border-radius:var(--r);padding:14px;margin-top:12px}
+.review-form-title{font-size:.8rem;font-weight:600;margin-bottom:10px}
+.rf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.rf-item label{display:block;font-size:.7rem;color:var(--sub);margin-bottom:3px}
+.rf-item input{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:5px;font-size:.84rem;background:#fff}
+
+/* ── Fabric Page ── */
+.fabric-page-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.mat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.mat-card-header{padding:14px 16px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.mat-name{font-size:.95rem;font-weight:700}
+.mat-count{font-size:.72rem;color:var(--sub)}
+.mat-products{padding:12px 16px}
+.mat-product-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:.82rem}
+.mat-product-row:last-child{border-bottom:none}
+.mat-p-name{font-weight:500;flex:1}
+.mat-p-price{color:var(--sub);font-size:.78rem}
+.mat-p-comp{font-size:.72rem;color:var(--sub);margin-top:1px}
+
+/* ── Brands ── */
+.brand-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.bc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px}
+.bc-name{font-size:.95rem;font-weight:600;margin-bottom:2px}
+.bc-en{font-size:.75rem;color:var(--sub);margin-bottom:9px}
+.bc-footer{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+
+/* ── Modal ── */
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:400;align-items:center;justify-content:center}
+.mo.on{display:flex}
+.modal{background:var(--surface);border-radius:12px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.mh{display:flex;align-items:center;justify-content:space-between;padding:18px 22px 14px;border-bottom:1px solid var(--border)}
+.mt{font-size:.95rem;font-weight:600}
+.mc{font-size:1.3rem;color:var(--sub);cursor:pointer}
+.mb{padding:18px 22px}
+.mf{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+.fg{margin-bottom:12px}
+.fl{display:block;font-size:.78rem;color:var(--sub);margin-bottom:4px;font-weight:500}
+.fi{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:.88rem;background:var(--bg);transition:.15s}
+.fi:focus{outline:none;border-color:var(--accent);background:#fff}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fs{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:.88rem;background:var(--bg);cursor:pointer}
+
+/* ── Empty ── */
+.empty{text-align:center;padding:50px 20px;color:var(--sub)}
+.empty .ei{font-size:2.2rem;margin-bottom:10px}
+.empty p{font-size:.86rem}
+
+/* ── Toast ── */
+.tc{position:fixed;bottom:22px;right:22px;z-index:999;display:flex;flex-direction:column;gap:6px}
+.toast{background:var(--accent);color:#fff;padding:10px 15px;border-radius:var(--r);font-size:.82rem;box-shadow:0 4px 14px rgba(0,0,0,.2);opacity:0;transform:translateY(8px);transition:.25s;max-width:280px}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.ok{background:#16a34a}.toast.err{background:#dc2626}
+
+/* ── Spinner ── */
+.spin{width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:4px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-main">🛍️ Fashion Research</div>
+    <div class="logo-sub">브랜드 런칭 기획 리서치 툴</div>
+  </div>
+  <nav class="nav">
+    <div class="nav-sec">분석</div>
+    <div class="ni on" onclick="nav('ranking',this)"><span class="ic">📊</span>랭킹 대시보드</div>
+    <div class="nav-sec">소재</div>
+    <div class="ni" onclick="nav('fabric',this)"><span class="ic">🧵</span>원단 분석</div>
+    <div class="nav-sec">관리</div>
+    <div class="ni" onclick="nav('brands',this)"><span class="ic">🏷️</span>브랜드 관리</div>
+    <div class="ni" onclick="nav('products',this)"><span class="ic">👗</span>제품 관리</div>
+    <div class="ni" onclick="nav('update',this)"><span class="ic">🔄</span>업데이트 센터</div>
+    <div class="nav-sec">설정</div>
+    <div class="ni" onclick="nav('settings',this)"><span class="ic">⚙️</span>설정</div>
+  </nav>
+  <div class="sf">
+    마지막 업데이트<br>
+    <span id="sfDate">—</span>
+    <div class="warn" id="sfBuzzCount"></div>
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="topTitle">📊 랭킹 대시보드</div>
+    <div class="topbar-actions">
+      <button class="btn btn-o btn-sm" onclick="openM('mAddProduct')">+ 제품 추가</button>
+      <button class="btn btn-p btn-sm" onclick="nav('update',this);startUpdate()">🔄 업데이트</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ── RANKING PAGE ── -->
+    <div class="page on" id="page-ranking">
+      <div class="data-notice">
+        ⚠️ <strong>현재 데이터는 예시(더미)입니다.</strong> 실제 제품 URL을 등록하고 업데이트를 실행하면 실제 데이터로 교체됩니다.
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="stat-label">데님팬츠</div><div class="stat-val" id="stD">0</div><div class="stat-sub">제품 트래킹</div></div>
+        <div class="stat"><div class="stat-label">셔츠·블라우스</div><div class="stat-val" id="stS">0</div><div class="stat-sub">제품 트래킹</div></div>
+        <div class="stat"><div class="stat-label">반팔티·나시티</div><div class="stat-val" id="stT">0</div><div class="stat-sub">제품 트래킹</div></div>
+        <div class="stat"><div class="stat-label">🔥 버즈 감지</div><div class="stat-val" id="stB">0</div><div class="stat-sub">급상승 제품</div></div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab on" onclick="switchTab('denim',this)">데님팬츠 <span class="cnt" id="ctD">0</span></div>
+        <div class="tab" onclick="switchTab('shirt',this)">셔츠·블라우스 <span class="cnt" id="ctS">0</span></div>
+        <div class="tab" onclick="switchTab('tshirt',this)">반팔티·나시티 <span class="cnt" id="ctT">0</span></div>
+        <div class="tab" onclick="switchTab('all',this)">전체 <span class="cnt" id="ctA">0</span></div>
+      </div>
+      <div id="rankContent"></div>
+    </div>
+
+    <!-- ── FABRIC PAGE ── -->
+    <div class="page" id="page-fabric">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div>
+          <div style="font-size:1.05rem;font-weight:700">🧵 원단 분석</div>
+          <div style="font-size:.8rem;color:var(--sub);margin-top:3px">소재별 제품 분포 · 가격대 비교 · 시즌 인기 소재</div>
+        </div>
+      </div>
+      <div class="data-notice">⚠️ 현재 원단 정보는 예시 데이터입니다. 제품 추가 시 실제 소재 정보를 입력하세요.</div>
+      <div class="fabric-page-grid" id="fabricGrid"></div>
+    </div>
+
+    <!-- ── BRANDS PAGE ── -->
+    <div class="page" id="page-brands">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div><div style="font-size:1.05rem;font-weight:700">브랜드 관리</div><div style="font-size:.8rem;color:var(--sub);margin-top:3px" id="brandCnt">0개 브랜드</div></div>
+        <button class="btn btn-p btn-sm" onclick="openM('mAddBrand')">+ 브랜드 추가</button>
+      </div>
+      <div class="brand-grid" id="brandGrid"></div>
+    </div>
+
+    <!-- ── PRODUCTS PAGE ── -->
+    <div class="page" id="page-products">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div><div style="font-size:1.05rem;font-weight:700">제품 관리</div><div style="font-size:.8rem;color:var(--sub)">URL 붙여넣기로 자동 파싱 + 엑셀 업로드</div></div>
+        <div style="display:flex;gap:8px">
+          <label class="btn btn-o btn-sm" style="cursor:pointer">📂 엑셀 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadExcel(this)"></label>
+          <button class="btn btn-p btn-sm" onclick="openM('mAddProduct')">+ 제품 추가</button>
+        </div>
+      </div>
+      <!-- URL 파싱 -->
+      <div class="tw" style="padding:16px;margin-bottom:16px">
+        <div style="font-size:.88rem;font-weight:600;margin-bottom:4px">🔗 URL로 빠르게 추가</div>
+        <div style="font-size:.78rem;color:var(--sub);margin-bottom:10px">29cm 또는 W컨셉 URL → 제품명·가격·이미지·원단 자동 파싱 시도</div>
+        <div style="display:flex;gap:8px">
+          <input type="text" class="fi" id="urlIn" placeholder="https://www.29cm.co.kr/product/detail?productNo=..." style="flex:1">
+          <button class="btn btn-p" onclick="parseUrl()">파싱하기</button>
+        </div>
+        <div id="parseOut" style="display:none;margin-top:10px;background:var(--bg);border-radius:var(--r);padding:12px;font-size:.8rem"></div>
+      </div>
+      <div class="tw"><table><thead><tr><th>제품</th><th>카테고리</th><th>시즌</th><th>가격</th><th>소재</th><th>29cm</th><th>W컨셉</th><th>블로그</th><th>인스타</th><th></th></tr></thead><tbody id="prodTbody"></tbody></table></div>
+    </div>
+
+    <!-- ── UPDATE PAGE ── -->
+    <div class="page" id="page-update">
+      <div style="font-size:1.05rem;font-weight:700;margin-bottom:16px">🔄 업데이트 센터</div>
+
+      <!-- 크롤링 실행 카드 -->
+      <div class="tw" style="padding:20px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:.92rem;font-weight:600">전체 제품 자동 크롤링</div>
+          <span id="upStatusBadge" style="font-size:.72rem;padding:3px 8px;border-radius:20px;background:#f3f4f6;color:var(--sub)">● 대기</span>
+        </div>
+        <div style="font-size:.82rem;color:var(--sub);margin-bottom:14px">
+          29cm·W컨셉 상품 정보, 네이버 블로그 수, 인스타그램 해시태그 수를 자동으로 수집하고 랭킹을 재계산합니다.
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="btn btn-p" id="updBtn" onclick="startUpdate()">🚀 크롤링 시작</button>
+          <button class="btn btn-o" onclick="clearLog()">🗑 로그 지우기</button>
+        </div>
+
+        <!-- 실시간 로그 터미널 -->
+        <div style="position:relative;margin-top:14px">
+          <div style="background:#111;color:#a3e635;border-radius:8px;padding:14px 14px 14px 14px;font-family:'Courier New',monospace;font-size:.74rem;height:220px;overflow-y:auto;white-space:pre-wrap;line-height:1.6;border:1px solid #2a2a2a" id="updateLog">&gt; 크롤링 시작 버튼을 누르세요...</div>
+          <div id="updateProgress" style="display:none;margin-top:8px">
+            <div style="height:4px;background:#e5e7eb;border-radius:4px;overflow:hidden">
+              <div id="progressBar" style="height:100%;background:linear-gradient(90deg,#22c55e,#a3e635);width:0%;transition:width .3s;border-radius:4px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 자동 스케줄 + 마지막 결과 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="tw" style="padding:20px">
+          <div style="font-size:.92rem;font-weight:600;margin-bottom:6px">⏰ 자동 스케줄</div>
+          <div style="font-size:.82rem;color:var(--sub)">매일 자정 00:00 자동 실행<br>(서버 실행 중일 때만)</div>
+        </div>
+        <div class="tw" style="padding:20px">
+          <div style="font-size:.92rem;font-weight:600;margin-bottom:6px">📅 마지막 업데이트</div>
+          <div style="font-size:.82rem;color:var(--sub)" id="lastUpdPanel">로딩 중...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SETTINGS PAGE ── -->
+    <div class="page" id="page-settings">
+      <div style="font-size:1.05rem;font-weight:700;margin-bottom:16px">⚙️ 설정</div>
+      <div class="tw" style="padding:20px;margin-bottom:14px">
+        <div style="font-size:.92rem;font-weight:600;margin-bottom:4px">네이버 검색 API</div>
+        <div style="font-size:.8rem;color:var(--sub);margin-bottom:14px">블로그 리뷰 수 자동 조회. <a href="https://developers.naver.com/apps/" target="_blank" style="color:var(--text);text-decoration:underline">네이버 개발자센터</a>에서 무료 발급</div>
+        <div class="fg"><label class="fl">Client ID</label><input type="text" class="fi" id="nId" placeholder="Client ID"></div>
+        <div class="fg"><label class="fl">Client Secret</label><input type="password" class="fi" id="nSec" placeholder="Client Secret"></div>
+        <button class="btn btn-p" onclick="saveNaver()">저장</button>
+      </div>
+      <div class="tw" style="padding:20px">
+        <div style="font-size:.92rem;font-weight:600;margin-bottom:4px">랭킹 점수 가중치</div>
+        <div style="font-size:.8rem;color:var(--sub);margin-bottom:14px">합계가 1.0이어야 합니다.</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px">
+          <div class="fg"><label class="fl">29cm 순위</label><input type="number" class="fi" id="w1" value="0.30" step="0.05" min="0" max="1"></div>
+          <div class="fg"><label class="fl">W컨셉 순위</label><input type="number" class="fi" id="w2" value="0.30" step="0.05" min="0" max="1"></div>
+          <div class="fg"><label class="fl">네이버 블로그</label><input type="number" class="fi" id="w3" value="0.20" step="0.05" min="0" max="1"></div>
+          <div class="fg"><label class="fl">인스타그램</label><input type="number" class="fi" id="w4" value="0.20" step="0.05" min="0" max="1"></div>
+        </div>
+        <button class="btn btn-p" onclick="saveWeights()">가중치 저장</button>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ── Detail Overlay + Panel ── -->
+<div class="overlay" id="detailOverlay" onclick="closeDetail()"></div>
+<div class="detail-panel" id="detailPanel">
+  <div class="dp-header">
+    <div style="font-size:.88rem;font-weight:600;color:var(--sub)">제품 상세</div>
+    <div class="dp-close" onclick="closeDetail()">✕</div>
+  </div>
+  <div class="dp-body" id="dpBody"></div>
+</div>
+
+<!-- ── Modals ── -->
+<div class="mo" id="mAddProduct">
+  <div class="modal">
+    <div class="mh"><div class="mt">제품 추가</div><div class="mc" onclick="closeM('mAddProduct')">×</div></div>
+    <div class="mb">
+      <div class="fg"><label class="fl">브랜드명 *</label><input type="text" class="fi" id="nBrand" placeholder="예: 모어댄레스"></div>
+      <div class="fr">
+        <div class="fg"><label class="fl">제품명 *</label><input type="text" class="fi" id="nName" placeholder="예: 와이드 데님 팬츠"></div>
+        <div class="fg"><label class="fl">카테고리 *</label><select class="fs" id="nCat"><option value="denim">데님팬츠</option><option value="shirt">셔츠·블라우스</option><option value="tshirt">반팔티·나시티</option><option value="all">전체</option></select></div>
+      </div>
+      <div class="fr">
+        <div class="fg"><label class="fl">가격</label><input type="number" class="fi" id="nPrice" placeholder="89000"></div>
+        <div class="fg"><label class="fl">시즌</label><input type="text" class="fi" id="nSeason" placeholder="SS25"></div>
+      </div>
+      <div class="fg"><label class="fl">29cm URL</label><input type="text" class="fi" id="nUrl29" placeholder="https://www.29cm.co.kr/..."></div>
+      <div class="fg"><label class="fl">W컨셉 URL</label><input type="text" class="fi" id="nUrlW" placeholder="https://www.wconcept.co.kr/..."></div>
+      <div class="fg"><label class="fl">이미지 URL</label><input type="text" class="fi" id="nImg" placeholder="https://..."></div>
+      <div style="font-size:.8rem;font-weight:600;margin-bottom:8px;margin-top:4px;color:var(--sub)">원단 정보</div>
+      <div class="fr">
+        <div class="fg"><label class="fl">소재명</label><input type="text" class="fi" id="nMat" placeholder="예: 데님, 린넨, 옥스포드"></div>
+        <div class="fg"><label class="fl">혼용률</label><input type="text" class="fi" id="nComp" placeholder="면 100%"></div>
+      </div>
+      <div class="fr">
+        <div class="fg"><label class="fl">중량/수</label><input type="text" class="fi" id="nWeight" placeholder="12oz / 20수"></div>
+        <div class="fg"><label class="fl">원산지</label><input type="text" class="fi" id="nOrigin" placeholder="국내, 일본산 원단 등"></div>
+      </div>
+      <div class="fr">
+        <div class="fg"><label class="fl">제조년월</label><input type="text" class="fi" id="nMfg" placeholder="2024.03"></div>
+      </div>
+      <div style="font-size:.8rem;font-weight:600;margin-bottom:8px;margin-top:4px;color:var(--sub)">점수 입력 <span style="color:var(--buzz);font-weight:400">(예시 데이터 / 수동 입력)</span></div>
+      <div class="fr">
+        <div class="fg"><label class="fl">29cm 순위점수 (0-100)</label><input type="number" class="fi" id="nS29" placeholder="0" min="0" max="100"></div>
+        <div class="fg"><label class="fl">W컨셉 순위점수 (0-100)</label><input type="number" class="fi" id="nSW" placeholder="0" min="0" max="100"></div>
+      </div>
+      <div class="fr">
+        <div class="fg"><label class="fl">네이버 블로그 수</label><input type="number" class="fi" id="nSN" placeholder="0"></div>
+        <div class="fg"><label class="fl">인스타 해시태그 수</label><input type="number" class="fi" id="nSI" placeholder="0"></div>
+      </div>
+    </div>
+    <div class="mf"><button class="btn btn-o" onclick="closeM('mAddProduct')">취소</button><button class="btn btn-p" onclick="addProduct()">추가하기</button></div>
+  </div>
+</div>
+
+<div class="mo" id="mAddBrand">
+  <div class="modal">
+    <div class="mh"><div class="mt">브랜드 추가</div><div class="mc" onclick="closeM('mAddBrand')">×</div></div>
+    <div class="mb">
+      <div class="fr">
+        <div class="fg"><label class="fl">브랜드명 *</label><input type="text" class="fi" id="bName" placeholder="예: 모어댄레스"></div>
+        <div class="fg"><label class="fl">영문명</label><input type="text" class="fi" id="bEn" placeholder="More Than Less"></div>
+      </div>
+      <div class="fg"><label class="fl">컨셉 태그 (쉼표 구분)</label><input type="text" class="fi" id="bConcept" placeholder="미니멀, 베이직, 캐주얼"></div>
+      <div class="fr">
+        <div class="fg" style="display:flex;align-items:center;gap:8px;padding-top:18px"><input type="checkbox" id="b29"><label for="b29" style="font-size:.84rem">29cm 입점</label></div>
+        <div class="fg" style="display:flex;align-items:center;gap:8px;padding-top:18px"><input type="checkbox" id="bW"><label for="bW" style="font-size:.84rem">W컨셉 입점</label></div>
+      </div>
+    </div>
+    <div class="mf"><button class="btn btn-o" onclick="closeM('mAddBrand')">취소</button><button class="btn btn-p" onclick="addBrand()">추가하기</button></div>
+  </div>
+</div>
+
+<div class="tc" id="tc"></div>
+
+<script>
+// ─── DATA ──────────────────────────────────────────────────────────
+let D = window.__DATA__ || {rankings:{denim:[],shirt:[],tshirt:[],all:[]},brands:[],settings:{},products_all:[],fabric_map:{}};
+let curTab = 'denim';
+let chartLine = null, chartBar = null;
+
+// ─── INIT ──────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  renderAll();
+  const lu = D.last_updated || '없음 (예시 데이터)';
+  if (gid('sfDate')) gid('sfDate').textContent = lu;
+  if (gid('lastUpdPanel')) gid('lastUpdPanel').textContent = lu;
+  const buzzCount = (D.products_all||[]).filter(p=>p.buzz).length;
+  if (buzzCount > 0 && gid('sfBuzzCount')) gid('sfBuzzCount').textContent = `🔥 급상승 ${buzzCount}개 감지`;
+  const w = (D.settings||{}).score_weights||{};
+  if (w.score_29cm) { gid('w1').value=w.score_29cm; gid('w2').value=w.score_wconcept||0.3; gid('w3').value=w.score_naver||0.2; gid('w4').value=w.score_instagram||0.2; }
+});
+
+function renderAll() {
+  renderStats();
+  renderRanking(curTab);
+  renderBrands();
+  renderProductsTable();
+  renderFabric();
+}
+
+// ─── STATS ────────────────────────────────────────────────────────
+function renderStats() {
+  const r = D.rankings;
+  gid('stD').textContent = (r.denim||[]).length;
+  gid('stS').textContent = (r.shirt||[]).length;
+  gid('stT').textContent = (r.tshirt||[]).length;
+  gid('stB').textContent = (D.products_all||[]).filter(p=>p.buzz).length;
+  gid('ctD').textContent = (r.denim||[]).length;
+  gid('ctS').textContent = (r.shirt||[]).length;
+  gid('ctT').textContent = (r.tshirt||[]).length;
+  gid('ctA').textContent = (r.all||[]).length;
+}
+
+// ─── RANKING TABLE ────────────────────────────────────────────────
+function renderRanking(cat) {
+  const products = D.rankings[cat]||[];
+  const con = gid('rankContent');
+  if (!products.length) {
+    con.innerHTML = '<div class="tw"><div class="empty"><div class="ei">📭</div><p>이 카테고리에 제품이 없습니다.<br>+ 제품 추가로 시작해보세요.</p></div></div>';
+    return;
+  }
+  const maxScore = Math.max(...products.map(p=>p.total_score||0), 0.01);
+  const rows = products.map((p,i) => {
+    const rank = i+1;
+    const rc = rank===1?'g':rank===2?'s':rank===3?'b':'';
+    const prev = p.prev_rank||0;
+    let chg = prev===0?'<span class="rc nw">NEW</span>':rank<prev?`<span class="rc up">▲${prev-rank}</span>`:rank>prev?`<span class="rc dn">▼${rank-prev}</span>`:'<span class="rc sm">–</span>';
+    const img = p.image_url
+      ? `<img class="thumb" src="${esc(p.image_url)}" alt="" onerror="this.style.display='none'">`
+      : `<div class="thumb-ph">👗</div>`;
+    const link = p.url_29cm||p.url_wconcept;
+    const nameEl = link ? `<a href="${esc(link)}" target="_blank">${esc(p.name)}</a>` : esc(p.name);
+    const b29 = p.url_29cm?'<span class="bdg b29">29cm</span>':'';
+    const bw  = p.url_wconcept?'<span class="bdg bw">W컨셉</span>':'';
+    const buzzEl = p.buzz?'<span class="buzz-badge">🔥 버즈</span>':'';
+    const pct = Math.min((p.total_score/maxScore)*100,100).toFixed(0);
+    const mat = (p.fabric||{}).material||'';
+    return `<tr style="cursor:pointer" onclick="openDetail('${p.id}')">
+      <td><span class="rn ${rc}">${rank}</span>${chg}</td>
+      <td><div class="pc">${img}<div class="pi"><div class="pb">${esc(p.brand_name)} ${buzzEl}</div><div class="pn">${nameEl}</div></div></div></td>
+      <td class="price">${num(p.price)}원</td>
+      <td>${b29}${bw}</td>
+      <td style="font-size:.76rem;color:var(--sub)">${esc(p.season||'')}</td>
+      <td style="font-size:.76rem;color:var(--sub)">${esc(mat)}</td>
+      <td>${p.score_29cm||0}</td><td>${p.score_wconcept||0}</td>
+      <td>${num(p.score_naver||0)}</td><td>${num(p.score_instagram||0)}</td>
+      <td><div class="sbw"><div class="sb"><div class="sbf" style="width:${pct}%"></div></div><span class="sv">${(p.total_score||0).toFixed(1)}</span></div></td>
+    </tr>`;
+  }).join('');
+  con.innerHTML = `<div class="tw"><table><thead><tr><th>순위</th><th>제품</th><th>가격</th><th>플랫폼</th><th>시즌</th><th>소재</th><th>29cm</th><th>W컨셉</th><th>블로그</th><th>인스타</th><th>종합</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// ─── DETAIL PANEL ─────────────────────────────────────────────────
+function openDetail(id) {
+  const p = (D.products_all||[]).find(x=>x.id===id);
+  if (!p) return;
+
+  const fab = p.fabric||{};
+  const imgEl = p.image_url
+    ? `<img class="dp-img" src="${esc(p.image_url)}" alt="${esc(p.name)}" onerror="this.className='dp-img-ph';this.innerHTML='👗'">`
+    : `<div class="dp-img-ph">👗</div>`;
+  const link29 = p.url_29cm ? `<a href="${esc(p.url_29cm)}" target="_blank" class="dp-link-btn dp-link-29">🛍️ 29cm에서 보기</a>` : '';
+  const linkW  = p.url_wconcept ? `<a href="${esc(p.url_wconcept)}" target="_blank" class="dp-link-btn dp-link-w">🛍️ W컨셉에서 보기</a>` : '';
+  const buzzBadge = p.buzz ? '<span class="buzz-badge" style="margin-left:8px">🔥 급상승 감지</span>' : '';
+
+  // 리뷰 히스토리 데이터
+  const hist = (p.review_history||[]).slice(-6);
+  const labels = hist.map(h=>h.date);
+  const naverData = hist.map(h=>h.naver||0);
+  const instaData = hist.map(h=>h.instagram||0);
+  const cnt29Data = hist.map(h=>h.cnt_29cm||0);
+  const cntWData  = hist.map(h=>h.cnt_wconcept||0);
+
+  // 최신 플랫폼별 비교
+  const latest = hist.length ? hist[hist.length-1] : {naver:p.score_naver||0, instagram:p.score_instagram||0, cnt_29cm:p.score_29cm||0, cnt_wconcept:p.score_wconcept||0};
+
+  const catName = {denim:'데님팬츠',shirt:'셔츠·블라우스',tshirt:'반팔티·나시티',all:'전체'};
+
+  gid('dpBody').innerHTML = `
+    <div class="dp-hero">
+      ${imgEl}
+      <div class="dp-info">
+        <div class="dp-brand">${esc(p.brand_name)} · ${catName[p.category]||p.category}</div>
+        <div class="dp-name">${esc(p.name)}${buzzBadge}</div>
+        <div class="dp-price">${num(p.price)}원</div>
+        ${p.season ? `<span class="dp-season">${esc(p.season)}</span>` : ''}
+        <div class="dp-links">${link29}${linkW}</div>
+        <div style="font-size:.76rem;color:var(--sub);margin-top:8px">종합점수 <strong>${(p.total_score||0).toFixed(1)}점</strong> · 전체 ${p.rank_all||'—'}위</div>
+        <div style="margin-top:12px">
+          <button class="btn btn-o btn-sm" onclick="crawlOne('${p.id}',this)" style="font-size:.78rem">🔍 이 제품만 크롤링</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="dp-section">
+      <div class="dp-sec-title">🧵 원단 정보</div>
+      <div class="fabric-grid">
+        <div class="fabric-item"><div class="fabric-key">소재명</div><div class="fabric-val">${esc(fab.material||'미입력')}</div></div>
+        <div class="fabric-item"><div class="fabric-key">혼용률</div><div class="fabric-val">${esc(fab.composition||'미입력')}</div></div>
+        <div class="fabric-item"><div class="fabric-key">중량/수</div><div class="fabric-val">${esc(fab.weight||'미입력')}</div></div>
+        <div class="fabric-item"><div class="fabric-key">원산지</div><div class="fabric-val">${esc(fab.origin||'미입력')}</div></div>
+        <div class="fabric-item"><div class="fabric-key">제조년월</div><div class="fabric-val">${esc(p.mfg_date||'미입력')}</div></div>
+      </div>
+    </div>
+
+    <div class="dp-section">
+      <div class="dp-sec-title">📈 월별 리뷰 추이</div>
+      ${hist.length < 2 ? '<div style="font-size:.82rem;color:var(--sub)">데이터가 부족합니다. 아래에서 월별 수치를 입력하세요.</div>' : ''}
+      <div class="chart-wrap"><canvas id="chartLine"></canvas></div>
+      <div class="notice-small">⚠️ 현재 수치는 예시 데이터입니다</div>
+    </div>
+
+    <div class="dp-section">
+      <div class="dp-sec-title">📊 플랫폼별 리뷰 비교 (최신)</div>
+      <div class="chart-wrap-bar"><canvas id="chartBar"></canvas></div>
+    </div>
+
+    <div class="dp-section">
+      <div class="dp-sec-title">📝 이번 달 수치 입력</div>
+      <div style="font-size:.78rem;color:var(--sub);margin-bottom:10px">실제 데이터를 입력하면 그래프가 업데이트됩니다.</div>
+      <div class="review-form">
+        <div class="rf-grid">
+          <div class="rf-item"><label>연월 (YYYY-MM)</label><input type="text" id="rfDate" value="${new Date().toISOString().slice(0,7)}"></div>
+          <div class="rf-item"><label>네이버 블로그 수</label><input type="number" id="rfNaver" placeholder="0" value="${latest.naver||0}"></div>
+          <div class="rf-item"><label>인스타 해시태그</label><input type="number" id="rfInsta" placeholder="0" value="${latest.instagram||0}"></div>
+          <div class="rf-item"><label>29cm 리뷰 수</label><input type="number" id="rf29" placeholder="0" value="${latest.cnt_29cm||0}"></div>
+          <div class="rf-item"><label>W컨셉 리뷰 수</label><input type="number" id="rfW" placeholder="0" value="${latest.cnt_wconcept||0}"></div>
+        </div>
+        <button class="btn btn-p btn-sm" onclick="saveReview('${p.id}')">저장</button>
+      </div>
+    </div>
+  `;
+
+  // 차트 그리기
+  requestAnimationFrame(() => {
+    drawLineChart(labels, naverData, instaData);
+    drawBarChart(latest);
+  });
+
+  gid('detailOverlay').classList.add('on');
+  gid('detailPanel').classList.add('on');
+}
+
+function closeDetail() {
+  gid('detailOverlay').classList.remove('on');
+  gid('detailPanel').classList.remove('on');
+  if (chartLine) { chartLine.destroy(); chartLine=null; }
+  if (chartBar)  { chartBar.destroy();  chartBar=null;  }
+}
+
+function drawLineChart(labels, naverData, instaData) {
+  const canvas = document.getElementById('chartLine');
+  if (!canvas) return;
+  if (chartLine) chartLine.destroy();
+  chartLine = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label:'네이버 블로그', data:naverData, borderColor:'#22c55e', backgroundColor:'rgba(34,197,94,.1)', tension:.4, fill:true, pointRadius:4 },
+        { label:'인스타그램', data:instaData, borderColor:'#f97316', backgroundColor:'rgba(249,115,22,.08)', tension:.4, fill:true, pointRadius:4 }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'top', labels:{ font:{size:11}, usePointStyle:true } } },
+      scales:{ y:{ beginAtZero:true, grid:{ color:'rgba(0,0,0,.05)' }, ticks:{font:{size:10}} }, x:{ grid:{ display:false }, ticks:{font:{size:10}} } }
+    }
+  });
+}
+
+function drawBarChart(latest) {
+  const canvas = document.getElementById('chartBar');
+  if (!canvas) return;
+  if (chartBar) chartBar.destroy();
+  chartBar = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: ['네이버 블로그', '인스타그램', '29cm', 'W컨셉'],
+      datasets: [{
+        label: '언급/리뷰 수',
+        data: [latest.naver||0, latest.instagram||0, latest.cnt_29cm||0, latest.cnt_wconcept||0],
+        backgroundColor: ['#22c55e','#f97316','#f59e0b','#8b5cf6'],
+        borderRadius: 5, borderSkipped: false
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{ y:{ beginAtZero:true, grid:{ color:'rgba(0,0,0,.05)' }, ticks:{font:{size:10}} }, x:{ grid:{ display:false }, ticks:{font:{size:10}} } }
+    }
+  });
+}
+
+// ─── SAVE REVIEW ──────────────────────────────────────────────────
+async function saveReview(id) {
+  const body = {
+    date: gv('rfDate'), naver: parseInt(gv('rfNaver'))||0,
+    instagram: parseInt(gv('rfInsta'))||0,
+    cnt_29cm: parseInt(gv('rf29'))||0, cnt_wconcept: parseInt(gv('rfW'))||0
+  };
+  const d = await api(`/api/products/${id}/review`, 'POST', body);
+  if (d.success) {
+    toast('✅ 리뷰 수치가 저장되었습니다','ok');
+    await refresh();
+    openDetail(id); // 차트 다시 그리기
+  } else toast('❌ 저장 실패','err');
+}
+
+// ─── FABRIC PAGE ──────────────────────────────────────────────────
+function renderFabric() {
+  const fm = D.fabric_map||{};
+  const keys = Object.keys(fm).sort((a,b) => fm[b].length - fm[a].length);
+  if (!keys.length) { gid('fabricGrid').innerHTML = '<div class="empty"><div class="ei">🧵</div><p>원단 정보가 있는 제품이 없습니다</p></div>'; return; }
+
+  const html = keys.map(mat => {
+    const items = fm[mat];
+    const avgPrice = Math.round(items.reduce((s,i)=>s+i.price,0)/items.length);
+    const priceRange = `${num(Math.min(...items.map(i=>i.price)))} ~ ${num(Math.max(...items.map(i=>i.price)))}원`;
+    const rows = items.map(i => `
+      <div class="mat-product-row">
+        <div>
+          <div class="mat-p-name">${esc(i.brand_name)} ${esc(i.name)}</div>
+          <div class="mat-p-comp">${esc(i.composition)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="mat-p-price">${num(i.price)}원</div>
+          <div style="font-size:.68rem;color:var(--sub)">${esc(i.season||'')}</div>
+        </div>
+      </div>`).join('');
+    return `<div class="mat-card">
+      <div class="mat-card-header">
+        <div>
+          <div class="mat-name">🧵 ${esc(mat)}</div>
+          <div style="font-size:.7rem;color:var(--sub);margin-top:2px">가격 범위: ${priceRange} · 평균 ${num(avgPrice)}원</div>
+        </div>
+        <div class="mat-count">${items.length}개 제품</div>
+      </div>
+      <div class="mat-products">${rows}</div>
+    </div>`;
+  }).join('');
+  gid('fabricGrid').innerHTML = html;
+}
+
+// ─── BRANDS ───────────────────────────────────────────────────────
+function renderBrands() {
+  const brands = D.brands||[];
+  gid('brandCnt').textContent = `총 ${brands.length}개 브랜드`;
+  const html = brands.map(b => {
+    const tags = (b.concept||[]).map(c=>`<span class="tag">${esc(c)}</span>`).join('');
+    const b29  = b.platform_29cm?'<span class="bdg b29">29cm</span>':'';
+    const bw   = b.platform_wconcept?'<span class="bdg bw">W컨셉</span>':'';
+    return `<div class="bc">
+      <div class="bc-name">${esc(b.name)}</div>
+      <div class="bc-en">${esc(b.name_en||'')}</div>
+      <div>${tags}</div>
+      <div class="bc-footer"><div>${b29}${bw}</div><button class="btn btn-d btn-sm" onclick="delBrand('${b.id}')">삭제</button></div>
+    </div>`;
+  }).join('') || '<div class="empty"><div class="ei">🏷️</div><p>브랜드가 없습니다</p></div>';
+  gid('brandGrid').innerHTML = html;
+}
+
+// ─── PRODUCTS TABLE ───────────────────────────────────────────────
+function renderProductsTable() {
+  const all = D.products_all||[];
+  const cn  = {denim:'데님팬츠',shirt:'셔츠·블라우스',tshirt:'반팔티·나시티',all:'전체'};
+  const rows = all.map(p => {
+    const img = p.image_url
+      ? `<img class="thumb" src="${esc(p.image_url)}" alt="" onerror="this.style.display='none'">`
+      : `<div class="thumb-ph">👗</div>`;
+    const mat = (p.fabric||{}).material||'—';
+    return `<tr>
+      <td onclick="openDetail('${p.id}')" style="cursor:pointer"><div class="pc">${img}<div class="pi"><div class="pb">${esc(p.brand_name)}</div><div class="pn">${esc(p.name)}</div></div></div></td>
+      <td>${cn[p.category]||p.category}</td>
+      <td style="font-size:.78rem">${esc(p.season||'—')}</td>
+      <td class="price">${num(p.price)}원</td>
+      <td style="font-size:.76rem;color:var(--sub)">${esc(mat)}</td>
+      <td>${p.score_29cm||0}</td><td>${p.score_wconcept||0}</td>
+      <td>${num(p.score_naver||0)}</td><td>${num(p.score_instagram||0)}</td>
+      <td style="display:flex;gap:4px">
+        <button class="btn btn-o btn-sm" onclick="openDetail('${p.id}')">상세</button>
+        <button class="btn btn-d btn-sm" onclick="delProduct('${p.id}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--sub)">제품이 없습니다</td></tr>';
+  gid('prodTbody').innerHTML = rows;
+}
+
+// ─── NAV ──────────────────────────────────────────────────────────
+const TITLES={ranking:'📊 랭킹 대시보드',fabric:'🧵 원단 분석',brands:'🏷️ 브랜드 관리',products:'👗 제품 관리',update:'🔄 업데이트 센터',settings:'⚙️ 설정'};
+function nav(id, el) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
+  gid('page-'+id).classList.add('on');
+  el.classList.add('on');
+  gid('topTitle').textContent = TITLES[id]||'';
+}
+
+function switchTab(cat, el) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on'); curTab=cat; renderRanking(cat);
+}
+
+// ─── MODALS ───────────────────────────────────────────────────────
+function openM(id){gid(id).classList.add('on')}
+function closeM(id){gid(id).classList.remove('on')}
+document.querySelectorAll('.mo').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)closeM(m.id)})});
+
+// ─── ADD PRODUCT ──────────────────────────────────────────────────
+async function addProduct() {
+  const payload = {
+    brand_name:gv('nBrand'), name:gv('nName'), category:gv('nCat'),
+    season:gv('nSeason'), price:parseInt(gv('nPrice'))||0,
+    url_29cm:gv('nUrl29'), url_wconcept:gv('nUrlW'), image_url:gv('nImg'),
+    mfg_date:gv('nMfg'),
+    fabric:{material:gv('nMat'),composition:gv('nComp'),weight:gv('nWeight'),origin:gv('nOrigin')},
+    score_29cm:parseInt(gv('nS29'))||0, score_wconcept:parseInt(gv('nSW'))||0,
+    score_naver:parseInt(gv('nSN'))||0, score_instagram:parseInt(gv('nSI'))||0
+  };
+  if (!payload.brand_name||!payload.name){toast('브랜드명과 제품명은 필수입니다','err');return;}
+  const d = await api('/api/products/add','POST',payload);
+  if (d.success){toast('✅ 제품이 추가되었습니다','ok');closeM('mAddProduct');await refresh();}
+  else toast('❌ 추가 실패','err');
+}
+
+// ─── DELETE PRODUCT ───────────────────────────────────────────────
+async function delProduct(id) {
+  if (!confirm('이 제품을 삭제하시겠습니까?')) return;
+  const d = await api('/api/products/'+id,'DELETE');
+  if (d.success){toast('삭제되었습니다','ok');await refresh();}
+}
+
+// ─── ADD BRAND ────────────────────────────────────────────────────
+async function addBrand() {
+  const payload = {
+    name:gv('bName'), name_en:gv('bEn'),
+    concept:gv('bConcept').split(',').map(s=>s.trim()).filter(Boolean),
+    platform_29cm:gid('b29').checked, platform_wconcept:gid('bW').checked
+  };
+  if (!payload.name){toast('브랜드명은 필수입니다','err');return;}
+  const d = await api('/api/brands/add','POST',payload);
+  if (d.success){toast('✅ 브랜드 추가','ok');closeM('mAddBrand');D.brands.push(d.brand);renderBrands();}
+}
+
+// ─── DELETE BRAND ─────────────────────────────────────────────────
+async function delBrand(id) {
+  if (!confirm('이 브랜드를 삭제하시겠습니까?')) return;
+  const d = await api('/api/brands/'+id,'DELETE');
+  if (d.success){D.brands=D.brands.filter(b=>b.id!==id);renderBrands();toast('삭제','ok');}
+}
+
+// ─── URL PARSE ────────────────────────────────────────────────────
+async function parseUrl() {
+  const url = gid('urlIn').value.trim();
+  if (!url){toast('URL을 입력해 주세요','err');return;}
+  const out = gid('parseOut');
+  const btn = out.previousElementSibling || out.parentElement.querySelector('button');
+  out.innerHTML='<span class="spin"></span> 파싱 중... (10~20초 소요)';
+  out.style.display='block';
+  const d = await api('/api/parse-url','POST',{url});
+  if (d.success) {
+    const fab = d.fabric||{};
+    const rows = [
+      ['제품명', esc(d.name||'—')],
+      ['브랜드', esc(d.brand||'—')],
+      ['가격', d.price ? num(d.price)+'원' : '—'],
+      ['시즌', esc(d.season||'—')],
+      ['카테고리', {denim:'데님팬츠',shirt:'셔츠·블라우스',tshirt:'반팔티·나시티',all:'전체'}[d.category]||d.category||'—'],
+      ['소재명', esc(fab.material||'—')],
+      ['혼용률', esc(fab.composition||'—')],
+      ['원산지', esc(fab.origin||'—')],
+      ['제조년월', esc(d.mfg_date||'—')],
+      ['29cm리뷰', d.review_count_29cm ? num(d.review_count_29cm)+'건' : '—'],
+      ['W컨셉리뷰', d.review_count_wconcept ? num(d.review_count_wconcept)+'건' : '—'],
+    ].map(([k,v])=>`<div style="display:flex;gap:6px;font-size:.8rem;padding:2px 0"><span style="color:var(--sub);width:60px;flex-shrink:0">${k}</span><span>${v}</span></div>`).join('');
+    out.innerHTML=`<div style="margin-bottom:10px"><strong>✅ 파싱 성공</strong></div>${rows}<button class="btn btn-p btn-sm" style="margin-top:10px" onclick='fillParse(${JSON.stringify(d)})'>➕ 제품 추가창에 자동 입력</button>`;
+  } else {
+    out.innerHTML=`<span style="color:#dc2626">❌ ${esc(d.error||'파싱 실패')}</span><br><small style="color:var(--sub)">사이트 접근이 차단됐거나 URL이 잘못됐을 수 있습니다.</small>`;
+  }
+}
+function fillParse(d) {
+  const fab = d.fabric||{};
+  // 기본 정보
+  if(d.name)      gid('nName').value    = d.name;
+  if(d.brand)     gid('nBrand').value   = d.brand;
+  if(d.price)     gid('nPrice').value   = d.price;
+  if(d.season)    gid('nSeason').value  = d.season;
+  if(d.image_url) gid('nImg').value     = d.image_url;
+  // 카테고리 선택
+  if(d.category) {
+    const sel = gid('nCat');
+    if(sel) { const opt = [...sel.options].find(o=>o.value===d.category); if(opt) sel.value=d.category; }
+  }
+  // URL
+  if(d.platform==='29cm')      { gid('nUrl29').value=d.url_29cm||gid('urlIn').value; }
+  if(d.platform==='wconcept')  { gid('nUrlW').value=d.url_wconcept||gid('urlIn').value; }
+  // 원단 정보
+  if(fab.material)     gid('nMat').value    = fab.material;
+  if(fab.composition)  gid('nComp').value   = fab.composition;
+  if(fab.weight && gid('nWeight')) gid('nWeight').value = fab.weight;
+  if(fab.origin && gid('nOrigin')) gid('nOrigin').value = fab.origin;
+  if(d.mfg_date && gid('nMfg')) gid('nMfg').value = d.mfg_date;
+  openM('mAddProduct');
+  toast('✅ 파싱 정보가 자동 입력됐습니다. 누락된 항목만 보완해 주세요.','ok');
+}
+
+// ─── EXCEL ────────────────────────────────────────────────────────
+async function uploadExcel(input) {
+  const file=input.files[0]; if(!file) return;
+  toast('📂 업로드 중...','');
+  const fd=new FormData(); fd.append('file',file);
+  try {
+    const r=await fetch('/api/upload/excel',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.success){toast(`✅ ${d.added}개 추가`,'ok');await refresh();}
+    else toast('❌ '+(d.error||'업로드 실패'),'err');
+  } catch {toast('❌ 업로드 오류','err');}
+}
+
+// ─── UPDATE ───────────────────────────────────────────────────────
+let _pollTimer = null;
+let _lastLogLen = 0;
+
+async function startUpdate() {
+  const btn = gid('updBtn');
+  if (!btn || btn.disabled) return;
+
+  const logEl  = gid('updateLog');
+  const badge  = gid('upStatusBadge');
+  const progWrap = gid('updateProgress');
+  const progBar  = gid('progressBar');
+
+  // UI 상태: 실행 중
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>크롤링 중...';
+  if (badge) { badge.textContent='● 실행 중'; badge.style.background='#d1fae5'; badge.style.color='#16a34a'; }
+  if (logEl) { logEl.textContent = ''; }
+  if (progWrap) progWrap.style.display='block';
+  if (progBar)  progBar.style.width='5%';
+  _lastLogLen = 0;
+
+  // 백그라운드 업데이트 시작
+  const d = await api('/api/update/start', 'POST');
+  if (!d.success) {
+    toast('❌ ' + (d.message||d.error), 'err');
+    _resetUpdateUI();
+    return;
+  }
+
+  // 폴링 시작 (1.5초 간격)
+  clearInterval(_pollTimer);
+  _pollTimer = setInterval(async () => {
+    const res = await api('/api/update/log');
+    if (!res || !res.logs) return;
+
+    const logs = res.logs;
+    // 새 로그만 추가
+    if (logs.length > _lastLogLen && logEl) {
+      const newLines = logs.slice(_lastLogLen).join('\n');
+      logEl.textContent += (logEl.textContent ? '\n' : '') + newLines;
+      logEl.scrollTop = logEl.scrollHeight;
+      _lastLogLen = logs.length;
+    }
+
+    // 진행률 애니메이션 (완료 전까지 가짜 진행)
+    if (progBar && res.running) {
+      const cur = parseFloat(progBar.style.width)||5;
+      if (cur < 85) progBar.style.width = Math.min(cur + 2, 85) + '%';
+    }
+
+    // 완료 감지
+    if (!res.running) {
+      clearInterval(_pollTimer);
+      if (progBar) progBar.style.width = '100%';
+      if (badge) { badge.textContent='✅ 완료'; badge.style.background='#d1fae5'; badge.style.color='#16a34a'; }
+      toast('✅ 크롤링 완료!', 'ok');
+      await refresh();
+      setTimeout(_resetUpdateUI, 3000);
+    }
+  }, 1500);
+}
+
+function _resetUpdateUI() {
+  const btn   = gid('updBtn');
+  const badge = gid('upStatusBadge');
+  const prog  = gid('updateProgress');
+  if (btn)   { btn.disabled=false; btn.innerHTML='🚀 크롤링 시작'; }
+  if (badge) { badge.textContent='● 대기'; badge.style.background='#f3f4f6'; badge.style.color='var(--sub)'; }
+  if (prog)  prog.style.display='none';
+}
+
+function clearLog() {
+  const logEl = gid('updateLog');
+  if (logEl) logEl.textContent = '> 로그가 지워졌습니다.';
+}
+
+async function crawlOne(pid, btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>크롤링 중...';
+  const d = await api(`/api/products/${pid}/crawl`, 'POST');
+  if (d.success) {
+    toast('🔍 크롤링 시작 — 업데이트 센터에서 로그 확인 가능', 'ok');
+    // 3초 후 데이터 refresh
+    setTimeout(async () => {
+      await refresh();
+      openDetail(pid);
+    }, 5000);
+  } else {
+    toast('❌ ' + (d.message||d.error), 'err');
+  }
+  btn.innerHTML = orig;
+  btn.disabled = false;
+}
+
+// ─── SETTINGS ─────────────────────────────────────────────────────
+async function saveNaver() {
+  const d=await api('/api/settings','POST',{naver_client_id:gv('nId'),naver_client_secret:gv('nSec')});
+  toast(d.success?'✅ 저장됨':'❌ 실패',d.success?'ok':'err');
+}
+async function saveWeights() {
+  const w={score_29cm:parseFloat(gv('w1')),score_wconcept:parseFloat(gv('w2')),score_naver:parseFloat(gv('w3')),score_instagram:parseFloat(gv('w4'))};
+  const total=Object.values(w).reduce((a,b)=>a+b,0);
+  if(Math.abs(total-1)>0.01){toast(`❌ 합계 ${total.toFixed(2)} (1.00 필요)`,'err');return;}
+  const d=await api('/api/settings','POST',{score_weights:w});
+  toast(d.success?'✅ 가중치 저장':'❌ 실패',d.success?'ok':'err');
+}
+
+// ─── REFRESH ──────────────────────────────────────────────────────
+async function refresh() {
+  try {
+    const r=await fetch('/'); const html=await r.text();
+    const m=html.match(/window\.__DATA__=(\{[\s\S]*?\});<\/script>/);
+    if(m){D=JSON.parse(m[1]);renderAll();
+      const bc=(D.products_all||[]).filter(p=>p.buzz).length;
+      gid('sfBuzzCount').textContent=bc?`🔥 급상승 ${bc}개 감지`:'';
+      if(D.last_updated){ gid('sfDate').textContent=D.last_updated; if(gid('lastUpdPanel')) gid('lastUpdPanel').textContent=D.last_updated; }
+    } else location.reload();
+  } catch {location.reload();}
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────
+async function api(path, method='GET', body=null) {
+  const opts={method,headers:{'Content-Type':'application/json'}};
+  if(body) opts.body=JSON.stringify(body);
+  try{const r=await fetch(path,opts);return await r.json();}
+  catch(e){return{success:false,error:String(e)};}
+}
+function gid(id){return document.getElementById(id)}
+function gv(id){return gid(id)?.value?.trim()||''}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function num(n){return Number(n||0).toLocaleString('ko-KR')}
+function toast(msg,type=''){
+  const c=gid('tc');const t=document.createElement('div');
+  t.className='toast '+(type||'');t.textContent=msg;c.appendChild(t);
+  requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),300)},3000);
+}
+</script>
+</body>
+</html>

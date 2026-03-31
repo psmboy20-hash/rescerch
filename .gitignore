@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.log
+exports/screenshots/
+exports/*.csv
+exports/*.xlsx
+.wrangler/
+node_modules/

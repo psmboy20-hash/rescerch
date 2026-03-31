@@ -1,0 +1,40 @@
+[
+  {
+    "id": "p9bf806f2",
+    "brand_id": "",
+    "brand_name": "ㅇㅇ",
+    "name": "LW186 빈티지 컷팅 포인트 데님 팬츠 - 라이트 그레이",
+    "category": "denim",
+    "season": "",
+    "price": 91700,
+    "url_29cm": "https://www.29cm.co.kr/products/2020984?categoryLargeCode=268100100&categoryMediumCode=268106100&categorySmallCode=268106104",
+    "url_wconcept": "",
+    "image_url": "https://img.29cm.co.kr/next-product/2023/04/11/0f8a02fe47ef428092f167de7ef3e743_20230411160100.jpg?width=1200&format=webp",
+    "fabric": {
+      "material": "데님",
+      "composition": "COTTON 100%",
+      "weight": "",
+      "origin": ""
+    },
+    "score_29cm": 0,
+    "score_wconcept": 0,
+    "score_naver": 0,
+    "score_instagram": 0,
+    "total_score": 0.0,
+    "rank": 1,
+    "rank_all": 1,
+    "prev_rank": 0,
+    "buzz": false,
+    "added_date": "2026-03-31",
+    "updated_date": "2026-03-31",
+    "review_history": [
+      {
+        "date": "2026-03",
+        "naver": 0,
+        "instagram": 0,
+        "cnt_29cm": 0,
+        "cnt_wconcept": 0
+      }
+    ]
+  }
+]

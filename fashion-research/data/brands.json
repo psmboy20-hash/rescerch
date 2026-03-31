@@ -1,0 +1,22 @@
+[
+  {"id": "b001", "name": "모어댄레스", "name_en": "More Than Less", "concept": ["미니멀", "베이직"], "platform_29cm": true, "platform_wconcept": true, "active": true},
+  {"id": "b002", "name": "서랍", "name_en": "Seorob", "concept": ["미니멀", "캐주얼"], "platform_29cm": true, "platform_wconcept": true, "active": true},
+  {"id": "b003", "name": "르917", "name_en": "Le917", "concept": ["미니멀", "시크"], "platform_29cm": true, "platform_wconcept": true, "active": true},
+  {"id": "b004", "name": "웜그레이테일", "name_en": "Warmgrey Tail", "concept": ["베이직", "내추럴"], "platform_29cm": true, "platform_wconcept": false, "active": true},
+  {"id": "b005", "name": "드파운드", "name_en": "D.Pound", "concept": ["미니멀", "캐주얼"], "platform_29cm": true, "platform_wconcept": true, "active": true},
+  {"id": "b006", "name": "젝시믹스", "name_en": "XEXYMIX", "concept": ["애슬레저", "베이직"], "platform_29cm": true, "platform_wconcept": false, "active": true},
+  {"id": "b007", "name": "무신사 스탠다드", "name_en": "Musinsa Standard", "concept": ["베이직", "캐주얼"], "platform_29cm": false, "platform_wconcept": false, "active": true},
+  {"id": "b008", "name": "낫포너드", "name_en": "Not For Nerd", "concept": ["캐주얼", "스트릿"], "platform_29cm": true, "platform_wconcept": true, "active": true},
+  {"id": "b009", "name": "팬시즈", "name_en": "Panxi", "concept": ["페미닌", "미니멀"], "platform_29cm": false, "platform_wconcept": true, "active": true},
+  {"id": "b010", "name": "살롱드욘", "name_en": "Salon de Yohn", "concept": ["페미닌", "클래식"], "platform_29cm": false, "platform_wconcept": true, "active": true},
+  {"id": "b011", "name": "이너시티", "name_en": "Inner City", "concept": ["미니멀", "시크"], "platform_29cm": true, "platform_wconcept": true, "active": true},
+  {"id": "b012", "name": "그루브라임", "name_en": "Groove Rhyme", "concept": ["캐주얼", "베이직"], "platform_29cm": false, "platform_wconcept": true, "active": true},
+  {"id": "b013", "name": "포멀웍스", "name_en": "Formal Works", "concept": ["미니멀", "포멀"], "platform_29cm": true, "platform_wconcept": true, "active": true},
+  {"id": "b014", "name": "베이스레인지", "name_en": "Base Range", "concept": ["내추럴", "미니멀"], "platform_29cm": true, "platform_wconcept": false, "active": true},
+  {"id": "b015", "name": "지컷", "name_en": "G-CUT", "concept": ["데님", "캐주얼"], "platform_29cm": true, "platform_wconcept": true, "active": true},
+  {"id": "b016", "name": "오호라", "name_en": "Ohora", "concept": ["트렌디", "베이직"], "platform_29cm": true, "platform_wconcept": false, "active": true},
+  {"id": "b017", "name": "콰이어트", "name_en": "Quiet", "concept": ["미니멀", "컨템포러리"], "platform_29cm": false, "platform_wconcept": true, "active": true},
+  {"id": "b018", "name": "블랭크코퍼레이션", "name_en": "Blank Corporation", "concept": ["베이직", "캐주얼"], "platform_29cm": false, "platform_wconcept": false, "active": true},
+  {"id": "b019", "name": "유니폼브릿지", "name_en": "Uniform Bridge", "concept": ["워크웨어", "미니멀"], "platform_29cm": true, "platform_wconcept": false, "active": true},
+  {"id": "b020", "name": "스컬프터", "name_en": "Sculptor", "concept": ["애슬레저", "미니멀"], "platform_29cm": false, "platform_wconcept": true, "active": true}
+]

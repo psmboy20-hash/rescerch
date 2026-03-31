@@ -1,0 +1,19 @@
+{
+  "last_updated": "2026-03-31 10:26:52",
+  "auto_update_enabled": true,
+  "update_time": "00:00",
+  "naver_client_id": "",
+  "naver_client_secret": "",
+  "score_weights": {
+    "score_29cm": 0.3,
+    "score_wconcept": 0.3,
+    "score_naver": 0.2,
+    "score_instagram": 0.2
+  },
+  "categories": {
+    "denim": "데님팬츠",
+    "shirt": "셔츠·블라우스",
+    "tshirt": "반팔티·나시티",
+    "all": "전체 패션"
+  }
+}
