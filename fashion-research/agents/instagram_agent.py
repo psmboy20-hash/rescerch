@@ -42,7 +42,9 @@ class InstagramPost:
 # 환경변수 또는 하드코딩 (실행 시 .env로 오버라이드 가능)
 IG_USERNAME = os.getenv("INSTAGRAM_USERNAME", "jellygogo1")
 IG_PASSWORD = os.getenv("INSTAGRAM_PASSWORD", "tjdan1020123!!")
-COOKIE_FILE = Path("./exports/instagram_cookies.json")
+# 쿠키 경로: 환경변수 INSTAGRAM_COOKIE_FILE → 기본값 ./exports/instagram_cookies.json
+_cookie_env = os.getenv("INSTAGRAM_COOKIE_FILE", "")
+COOKIE_FILE = Path(_cookie_env) if _cookie_env else Path("./exports/instagram_cookies.json")
 SCREENSHOT_DIR = Path("./exports/screenshots")
 
 

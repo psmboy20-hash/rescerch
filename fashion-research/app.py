@@ -238,6 +238,7 @@ class Handler(BaseHTTPRequestHandler):
                 'image_url': data.get('image_url',''),
                 'fabric': data.get('fabric', {'material':'','composition':'','weight':'','origin':''}),
                 'mfg_date': data.get('mfg_date',''),
+                'size_spec': data.get('size_spec',''),
                 'score_29cm': int(data.get('score_29cm',0)),
                 'score_wconcept': int(data.get('score_wconcept',0)),
                 'score_naver': int(data.get('score_naver',0)),
@@ -483,7 +484,7 @@ class Handler(BaseHTTPRequestHandler):
                 if p['id'] == pid:
                     for k in ['name','brand_name','category','season','price',
                               'url_29cm','url_wconcept','image_url','fabric',
-                              'mfg_date',
+                              'mfg_date','size_spec',
                               'score_29cm','score_wconcept','score_naver','score_instagram']:
                         if k in data: p[k] = data[k]
                     p['updated_date'] = date.today().isoformat()
@@ -547,9 +548,11 @@ def run_update():
                     if d.get('season'): p['season'] = d['season']
                     if d.get('mfg_date'): p['mfg_date'] = d['mfg_date']
                     if d.get('price') and not p.get('price'): p['price'] = d['price']
-                    if d.get('review_count_29cm'): p['score_29cm'] = d['review_count_29cm']
-                    log(f"  ✅ 29cm: 리뷰 {d.get('review_count_29cm',0)}건 | 시즌 {d.get('season','—')} | 소재 {d.get('fabric',{}).get('composition','—')[:30]}")
-                else:
+                    # auto_crawl은 'review_count' 키 사용 (모든 플랫폼에서)
+                    rc_29 = d.get('review_count', 0) or d.get('review_count_29cm', 0)
+                    if rc_29: p['score_29cm'] = rc_29
+                    if d.get('size_spec') and not p.get('size_spec'): p['size_spec'] = d['size_spec']
+                    log(f"  ✅ 29cm: 리뷰 {rc_29}건 | 시즌 {d.get('season','—')} | 소재 {d.get('fabric',{}).get('composition','—')[:30]}")
                     log(f"  ⚠ 29cm 파싱 실패: {d['error']}")
             except Exception as e:
                 log(f"  ⚠ 29cm 오류: {e}")
@@ -565,9 +568,9 @@ def run_update():
                         p['fabric'] = d['fabric']
                     if d.get('season') and not p.get('season'): p['season'] = d['season']
                     if d.get('mfg_date') and not p.get('mfg_date'): p['mfg_date'] = d['mfg_date']
-                    if d.get('review_count_wconcept'): p['score_wconcept'] = d['review_count_wconcept']
-                    log(f"  ✅ W컨셉: 리뷰 {d.get('review_count_wconcept',0)}건")
-                else:
+                    rc_wc = d.get('review_count', 0) or d.get('review_count_wconcept', 0)
+                    if rc_wc: p['score_wconcept'] = rc_wc
+                    log(f"  ✅ W컨셉: 리뷰 {rc_wc}건")
                     log(f"  ⚠ W컨셉 파싱 실패: {d['error']}")
             except Exception as e:
                 log(f"  ⚠ W컨셉 오류: {e}")
