@@ -3,6 +3,12 @@ scrapers/bulk_scanner.py
 벌크 스캐너 - 카테고리 URL → 상위 N개 제품 일괄 분석
 """
 import asyncio
+import sys
+
+# Windows 호환 설정
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from loguru import logger
 import pandas as pd
 from tqdm import tqdm

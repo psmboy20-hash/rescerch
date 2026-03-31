@@ -3,6 +3,13 @@ app.py
 ARÊTE Fashion Intelligence Dashboard - Streamlit 메인 앱
 실행: streamlit run app.py
 """
+import asyncio
+import sys
+
+# Windows에서 Playwright + Streamlit 호환 설정 (필수!)
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
